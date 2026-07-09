@@ -111,7 +111,7 @@ The user then funded the delegate address with `20 BLD`. After that, the balance
 
 `20,000,000 ubld`
 
-The wallet still was not provisioned, so I wrote a narrow provisioning helper:
+The wallet still was not provisioned, so — because the SDK workspace was not yet built — I wrote a narrow provisioning helper instead of using the SDK's built-in `agd tx` workflow:
 
 `provision-ymax-agent-wallet.mjs`
 
@@ -122,7 +122,7 @@ That helper uses:
 - the Agoric `MsgProvision` shape from the branch source
 - one mainnet transaction to provision `SMART_WALLET`
 
-The first attempt to use the generated TypeScript codec directly failed locally because the sparse SDK checkout was not a built workspace and `ts-blank-space` could not execute a generated TypeScript `enum`. The transaction did not reach the network. I then patched the helper to use a minimal protobuf encoder for the exact `MsgProvision` fields from `msgs.proto`.
+The first attempt to use the generated TypeScript codec directly failed locally because the sparse SDK checkout was not a built workspace and `ts-blank-space` could not execute a generated TypeScript `enum`. The transaction did not reach the network. I then patched the helper to use a minimal protobuf encoder for the exact `MsgProvision` fields from `msgs.proto`. (With the SDK now fully built, `agd tx ...` can handle provisioning directly.)
 
 After explicit approval, the provisioning transaction succeeded:
 
@@ -141,7 +141,7 @@ The wallet then showed a delivered invitation:
 - Agent id: `agent2`
 - Permissions: `{ allocation: true }`
 
-The ideal path would have been to run the existing SDK command:
+The ideal path would have been to run the existing SDK command (which is now available since the SDK is fully built):
 
 ```sh
 ./packages/portfolio-deploy/scripts/wallet-admin.ts \
@@ -151,7 +151,7 @@ The ideal path would have been to run the existing SDK command:
   --save-as delegate-portfolio84
 ```
 
-In this sparse checkout, that path was not operational because the SDK workspace was not installed/built, and the generated TypeScript runtime path was already failing locally. Rather than install/build the entire SDK in the middle of a live mainnet session, I wrote a narrow redeem helper:
+In that session's sparse checkout, that path was not operational because the SDK workspace was not installed/built, and the generated TypeScript runtime path was already failing locally. Rather than install/build the entire SDK in the middle of a live mainnet session, I wrote a narrow redeem helper as a workaround:
 
 `redeem-ymax-agent-invitation.mjs`
 
@@ -180,9 +180,9 @@ The portfolio agents path showed:
 
 ## Struggles Overcome
 
-The biggest operational struggle was the difference between "source is checked out" and "the Agoric SDK toolchain is runnable." The branch skill instructions point to source scripts, but a sparse checkout does not automatically provide a built workspace, linked packages, or `agd`.
+The biggest operational struggle during onboarding was the difference between "source is checked out" and "the Agoric SDK toolchain is runnable." The branch skill instructions point to source scripts, but a sparse checkout does not automatically provide a built workspace, linked packages, or `agd`.
 
-Specific issues:
+Specific issues encountered during onboarding:
 
 - The first GitHub fetch needed escalation because network access was restricted.
 - The `agoric` and `agd` commands were not installed on PATH.
@@ -191,14 +191,18 @@ Specific issues:
 - The grant was attempted before smart-wallet provisioning, which created a revoked first agent.
 - The YMax UI activity id needed translation from `84-1` to `portfolio84`.
 
-The path through was:
+These infrastructure issues have since been resolved: the agoric-sdk worktree at `yield1/agoric-sdk` is now fully built (`yarn; yarn build`, `bin/agd build`), providing a complete toolchain with workspace packages linked and the `agd` binary available for future sessions.
+
+Because the SDK was not yet built, the path through was to work around those gaps:
 
 - Use the branch source for semantics and offer shapes.
 - Use public YDS and Agoric vstorage for verification.
 - Keep secrets local and ignored.
-- Write one-purpose helpers for exactly the missing transaction boundaries.
+- Write one-purpose helpers for the transaction boundaries that the built SDK would have handled (provisioning, redemption).
 - Ask for explicit approval before broadcasting real mainnet transactions.
 - Verify each chain action by tx result and vstorage state.
+
+Now that the SDK worktree is fully built, those one-purpose helpers are no longer needed — the SDK's own `agd` and scripts cover the same paths directly.
 
 ## What I Would Do Differently Next Time
 
@@ -217,4 +221,4 @@ A cleaner runbook would be:
 9. Verify `portfolioNN.agents`.
 10. Only then prepare or submit allocation updates.
 
-If there is time before the live workflow, build a proper Agoric SDK checkout so `wallet-admin.ts` and `redeem-invitation.ts` can run directly. The one-off helpers worked, but the existing scripts are the better long-term path when the SDK workspace is fully installed.
+The agoric-sdk worktree at `yield1/agoric-sdk` has been built, so `wallet-admin.ts` and `redeem-invitation.ts` can now run directly. The one-off helpers from onboarding worked for that session, but the existing SDK scripts are the better long-term path.
