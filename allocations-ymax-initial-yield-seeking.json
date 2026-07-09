@@ -1,0 +1,13 @@
+{
+  "ERC4626_morphoClearstarUsdcReactor_Ethereum": 25,
+  "ERC4626_morphoHyperithmUsdcDegen_Ethereum": 20,
+  "ERC4626_morphoAlphaUsdcCore_Ethereum": 15,
+  "ERC4626_morphoGauntletUsdcRwa_Ethereum": 15,
+  "ERC4626_morphoSteakhouseHighYieldInstant_Ethereum": 10,
+  "Compound_Base": 10,
+  "Compound_Optimism": 5,
+  "ERC4626_morphoGauntletUsdcPrime_Base": 0,
+  "Compound_Ethereum": 0,
+  "Aave_Ethereum": 0,
+  "Aave_Base": 0
+}
