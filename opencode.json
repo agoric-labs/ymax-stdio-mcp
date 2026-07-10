@@ -3,14 +3,15 @@
   "agent": {
     "defi-expert": {}
   },
-  "mcpServers": {
+  "mcp": {
     "ymax-yield-agent": {
-      "command": "npx",
-      "args": ["tsx", "mcp-server/src/server.ts"],
+      "type": "local",
+      "command": ["npx", "tsx", "mcp-server/src/server.ts"],
+      "enabled": true,
       "env": {
-        "SPONSOR_MNEMONIC": "${SPONSOR_MNEMONIC}",
-        "SPONSOR_PRIVATE_KEY": "${SPONSOR_PRIVATE_KEY}",
-        "RPC_URL": "${RPC_URL}"
+        "SPONSOR_MNEMONIC": "{env:SPONSOR_MNEMONIC}",
+        "SPONSOR_PRIVATE_KEY": "{env:SPONSOR_PRIVATE_KEY}",
+        "RPC_URL": "{env:RPC_URL}"
       }
     }
   }
