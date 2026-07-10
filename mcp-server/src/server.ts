@@ -207,58 +207,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
-server.setRequestHandler(
-  CallToolRequestSchema,
-  async (request): Promise<ToolResponse> => {
-    const { name, arguments: args } = request.params;
-
-    try {
-      switch (name) {
-        case 'generate_delegate_key': {
-          const result = await handleGenerateKey();
-          return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-          };
-        }
-
-        case 'redeem_invitation': {
-          const { bearerToken, portfolioId } = args as {
-            bearerToken: string;
-            portfolioId: number;
-          };
-          return await handleRedeem(bearerToken, portfolioId);
-        }
-
-        case 'submit_target_allocation': {
-          const { bearerToken, allocations } = args as {
-            bearerToken: string;
-            allocations: Record<string, number>;
-          };
-          return await handleSubmitAllocation(bearerToken, allocations);
-        }
-
-        case 'rotate_token': {
-          const { bearerToken } = args as { bearerToken: string };
-          return await handleRotateToken(bearerToken);
-        }
-
-        default:
-          return {
-            content: [
-              { type: 'text', text: `unknown tool: ${name}` },
-            ],
-          };
-      }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'internal server error';
-      return {
-        content: [{ type: 'text', text: message }],
-      };
-    }
-  },
-);
-
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: [
     {
@@ -305,6 +253,72 @@ server.setRequestHandler(ReadResourceRequestSchema, async request => {
 
   throw new Error(`unknown resource: ${uri}`);
 });
+
+const log = (...args: unknown[]) =>
+  console.error('-- ymax-mcp:', ...args);
+
+server.setRequestHandler(
+  CallToolRequestSchema,
+  async (request): Promise<ToolResponse> => {
+    const { name, arguments: args } = request.params;
+    const started = Date.now();
+    log(`tool call: ${name}`);
+
+    try {
+      switch (name) {
+        case 'generate_delegate_key': {
+          const result = await handleGenerateKey();
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return {
+            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          };
+        }
+
+        case 'redeem_invitation': {
+          const { bearerToken, portfolioId } = args as {
+            bearerToken: string;
+            portfolioId: number;
+          };
+          const res = await handleRedeem(bearerToken, portfolioId);
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return res;
+        }
+
+        case 'submit_target_allocation': {
+          const { bearerToken, allocations } = args as {
+            bearerToken: string;
+            allocations: Record<string, number>;
+          };
+          const res = await handleSubmitAllocation(bearerToken, allocations);
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return res;
+        }
+
+        case 'rotate_token': {
+          const { bearerToken } = args as { bearerToken: string };
+          const res = await handleRotateToken(bearerToken);
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return res;
+        }
+
+        default:
+          log(`tool unknown: ${name}`);
+          return {
+            content: [
+              { type: 'text', text: `unknown tool: ${name}` },
+            ],
+          };
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'internal server error';
+      log(`tool err: ${name} (${Date.now() - started}ms) — ${message}`);
+      return {
+        content: [{ type: 'text', text: message }],
+      };
+    }
+  },
+);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
