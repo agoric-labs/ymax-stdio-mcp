@@ -4,32 +4,6 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Load local configuration before constructing injected I/O below.
-const envPath = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '.env',
-);
-if (existsSync(envPath)) {
-  const text = readFileSync(envPath, 'utf8');
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    let key = trimmed.slice(0, eq).trim();
-    let value = trimmed.slice(eq + 1).trim();
-    if (key.startsWith('export ')) key = key.slice(7);
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (!process.env[key]) {
-      process.env[key] = value;
-    }
-  }
-}
-
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -47,27 +21,48 @@ import {
 } from './handlers/propose.ts';
 import { handleRedeem } from './handlers/redeem.ts';
 import { handleSubmitAllocation } from './handlers/submit-allocation.ts';
-import { DEFAULT_STATE_FILE, makeSessionStore } from './state.ts';
+import {
+  DEFAULT_STATE_FILE,
+  makeStateStore,
+  type StateStore,
+} from './state.ts';
 import { toolError } from './responses.ts';
 import type { ToolResponse } from './types.ts';
 
-const RPC_URL = process.env.RPC_URL || 'https://main.rpc.agoric.net:443';
-const YMAX_UI_URL =
-  process.env.YMAX_UI_URL ||
-  'https://staging-agentic-ui.ymax0-ui.pages.dev';
-const sessionStore = makeSessionStore(
-  process.env.YMAX_STATE_FILE || DEFAULT_STATE_FILE,
-);
-const agoricIO = {
-  fetch: globalThis.fetch.bind(globalThis),
-  agoricNet: process.env.AGORIC_NET || 'main',
-};
-const registrationIO = {
-  fetch: agoricIO.fetch,
-  ydsUrl: process.env.YDS_URL || 'https://main0.ymax.app',
-  chainId: process.env.CHAIN_ID || 'agoric-3',
-  ymaxInstance: process.env.YMAX_INSTANCE || 'ymax0',
-};
+interface ServerPowers {
+  env: NodeJS.ProcessEnv;
+  fetch: typeof fetch;
+  setTimeout: typeof setTimeout;
+  now: () => Date;
+  stateStore: StateStore;
+}
+
+function loadDotEnv(env: NodeJS.ProcessEnv): void {
+  const envPath = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '.env',
+  );
+  if (!existsSync(envPath)) return;
+
+  const text = readFileSync(envPath, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    let key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (key.startsWith('export ')) key = key.slice(7);
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!env[key]) {
+      env[key] = value;
+    }
+  }
+}
 
 const SOLVER_CONSTRAINTS = {
   uri: 'solver-constraints',
@@ -81,7 +76,7 @@ const SOLVER_CONSTRAINTS = {
         {
           name: 'CCTP hard runtime floor',
           amount: '$1.00 (1,000,000 uusdc)',
-          layer: 'Hard Fail — bridge leg must be ≥ $1.00',
+          layer: 'Hard Fail — bridge leg must be >= $1.00',
           source: 'pos-evm.flows.ts:191-216',
         },
         {
@@ -92,7 +87,7 @@ const SOLVER_CONSTRAINTS = {
           source: 'target-balances.ts:20',
         },
         {
-          name: 'CCTPv2 EVM→EVM link min',
+          name: 'CCTPv2 EVM->EVM link min',
           amount: '$0.10 (100,000 uusdc)',
           layer: 'LP coupling constraint',
           source: 'prod-network.ts',
@@ -111,15 +106,15 @@ const SOLVER_CONSTRAINTS = {
         },
         {
           name: 'Effective arc minimum (in practice)',
-          amount: '$1.47–$2.00',
+          amount: '$1.47-$2.00',
           layer:
             'Combines link min + CCTP fee + delta soft min + arc interactions',
           source: 'LP solver coupling constraints',
         },
       ],
       practicalRules: [
-        'Same-chain deltas: ≥ $1.00 (≈ 2.2% weight at $45 TVL)',
-        'Cross-chain deltas: ≥ $2.00 (≈ 4.5% weight at $45 TVL)',
+        'Same-chain deltas: >= $1.00 (about 2.2% weight at $45 TVL)',
+        'Cross-chain deltas: >= $2.00 (about 4.5% weight at $45 TVL)',
         'At sub-$100 TVL, use deltas of +5 to +15 percentage points to avoid solver rejection',
         'Residuals below $1.00 on non-native chain are likely stranded',
       ],
@@ -136,11 +131,11 @@ const PROVISIONING_RUNBOOK = {
     'Correct ordering for onboarding a YMax allocation delegate. Derived from live mainnet experience.',
   mimeType: 'text/plain',
   text: [
-    '1. generate_delegate_key — keygen + sponsor fund + smart-wallet provision (single atomic MCP tool)',
-    '2. propose_create — build a combined create-and-delegate UI link',
+    '1. generate_delegate_key - keygen + sponsor fund + smart-wallet provision (single atomic MCP tool)',
+    '2. propose_create - build a combined create-and-delegate UI link',
     '3. User creates, funds, and delegates in one YMax UI flow',
-    '4. redeem_invitation — derive portfolio binding, redeem, and save state',
-    '5. submit_target_allocation — allocate (repeat as needed)',
+    '4. redeem_invitation - derive portfolio binding, redeem, and save state',
+    '5. submit_target_allocation - allocate (repeat as needed)',
     '',
     'Order matters: provision BEFORE the combined UI flow. A grant before provisioning produces a revoked agent.',
     '',
@@ -194,10 +189,10 @@ const server = new Server(
     instructions: [
       'Use generate_delegate_key to create and provision a delegate wallet, then propose_create to give the user one UI flow that creates the portfolio and grants allocation authority.',
       'After the user completes the UI flow, call redeem_invitation. The portfolio ID, agent ID, and permissions come from the delivered invitation.',
-      'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set — query via YDS to discover it.',
+      'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set - query via YDS to discover it.',
       'Use propose_edit when the user should approve a proposed allocation or instrument-set change in the UI.',
       'Use propose_grant when delegating allocation authority over an existing portfolio.',
-      'The solver enforces minimum transfer thresholds — consult solver-constraints resource for limits.',
+      'The solver enforces minimum transfer thresholds - consult solver-constraints resource for limits.',
       'Provision must happen BEFORE grant. See provisioning-runbook and ymax-onboarding resources for the full run order.',
       'Before submitting an allocation, read ymax-allocation-delegate for guardrails, candidate-building heuristics, and escalation rules.',
     ].join('\n'),
@@ -209,11 +204,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'generate_delegate_key',
       description:
-        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. The mnemonic is stored in the MCP server and never returned to the client.',
+        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. Returns the delegate address for the grant UI. The mnemonic is stored in the MCP server and never returned to the client. Refuses to replace an existing active delegate unless clobberActiveDelegate is true.',
       inputSchema: {
         type: 'object',
-        properties: {},
-        required: [],
+        properties: {
+          clobberActiveDelegate: {
+            type: 'boolean',
+            description:
+              'Set true only when you intentionally want to replace the existing active delegate.',
+          },
+        },
+        required: ['clobberActiveDelegate'],
       },
     },
     {
@@ -340,94 +341,110 @@ server.setRequestHandler(ReadResourceRequestSchema, async request => {
 const log = (...args: unknown[]) =>
   console.error('-- ymax-mcp:', ...args);
 
-server.setRequestHandler(
-  CallToolRequestSchema,
-  async (request): Promise<ToolResponse> => {
-    const { name, arguments: args } = request.params;
-    const started = Date.now();
-    log(`tool call: ${name}`);
+function installToolHandlers(powers: ServerPowers): void {
+  const ymaxUiUrl =
+    powers.env.YMAX_UI_URL ||
+    'https://staging-agentic-ui.ymax0-ui.pages.dev';
 
-    try {
-      switch (name) {
-        case 'generate_delegate_key': {
-          const result = await handleGenerateKey(sessionStore, {
-            sponsor: {
-              rpcUrl: RPC_URL,
-              amount: process.env.SPONSOR_AMOUNT || '20000000',
-              mnemonic: process.env.SPONSOR_MNEMONIC,
-              privateKey: process.env.SPONSOR_PRIVATE_KEY,
-            },
-            provision: { rpcUrl: RPC_URL },
-          });
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return {
-            content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-          };
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    async (request): Promise<ToolResponse> => {
+      const { name, arguments: args } = request.params;
+      const started = Date.now();
+      log(`tool call: ${name}`);
+
+      try {
+        switch (name) {
+          case 'generate_delegate_key': {
+            const { clobberActiveDelegate } = args as {
+              clobberActiveDelegate: boolean;
+            };
+            const result = await handleGenerateKey(
+              clobberActiveDelegate,
+              powers,
+            );
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return {
+              content: [
+                { type: 'text', text: JSON.stringify(result, null, 2) },
+              ],
+            };
+          }
+
+          case 'redeem_invitation': {
+            const res = await handleRedeem(powers);
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return res;
+          }
+
+          case 'propose_create': {
+            const { allocations } = args as {
+              allocations: Record<string, number | string>;
+            };
+            const res = await handleProposeCreate(
+              allocations,
+              powers.stateStore,
+              ymaxUiUrl,
+            );
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return res;
+          }
+
+          case 'propose_edit': {
+            const { allocations } = args as {
+              allocations: Record<string, number | string>;
+            };
+            const res = await handleProposeEdit(
+              allocations,
+              powers.stateStore,
+              ymaxUiUrl,
+            );
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return res;
+          }
+
+          case 'propose_grant': {
+            const res = await handleProposeGrant(
+              powers.stateStore,
+              ymaxUiUrl,
+            );
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return res;
+          }
+
+          case 'submit_target_allocation': {
+            const { allocations } = args as {
+              allocations: Record<string, number>;
+            };
+            const res = await handleSubmitAllocation(allocations, powers);
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return res;
+          }
+
+          default:
+            log(`tool unknown: ${name}`);
+            return toolError(`unknown tool: ${name}`);
         }
-
-        case 'redeem_invitation': {
-          const res = await handleRedeem({ ...agoricIO, state: sessionStore });
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return res;
-        }
-
-        case 'propose_create': {
-          const { allocations } = args as {
-            allocations: Record<string, number | string>;
-          };
-          const res = await handleProposeCreate(
-            allocations,
-            sessionStore,
-            YMAX_UI_URL,
-          );
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return res;
-        }
-
-        case 'propose_edit': {
-          const { allocations } = args as {
-            allocations: Record<string, number | string>;
-          };
-          const res = await handleProposeEdit(
-            allocations,
-            sessionStore,
-            YMAX_UI_URL,
-          );
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return res;
-        }
-
-        case 'propose_grant': {
-          const res = await handleProposeGrant(sessionStore, YMAX_UI_URL);
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return res;
-        }
-
-        case 'submit_target_allocation': {
-          const { allocations } = args as {
-            allocations: Record<string, number>;
-          };
-          const res = await handleSubmitAllocation(allocations, {
-            ...agoricIO,
-            state: sessionStore,
-            registration: registrationIO,
-          });
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return res;
-        }
-
-        default:
-          log(`tool unknown: ${name}`);
-          return toolError(`unknown tool: ${name}`);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'internal server error';
+        log(`tool err: ${name} (${Date.now() - started}ms) - ${message}`);
+        return toolError(message);
       }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'internal server error';
-      log(`tool err: ${name} (${Date.now() - started}ms) — ${message}`);
-      return toolError(message);
-    }
-  },
-);
+    },
+  );
+}
+
+loadDotEnv(process.env);
+installToolHandlers({
+  env: process.env,
+  fetch: globalThis.fetch.bind(globalThis),
+  setTimeout: globalThis.setTimeout,
+  now: () => new Date(),
+  stateStore: makeStateStore(
+    process.env.YMAX_STATE_FILE || DEFAULT_STATE_FILE,
+  ),
+});
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

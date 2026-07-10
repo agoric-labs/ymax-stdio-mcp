@@ -5,12 +5,13 @@ import {
   reflectWalletStore,
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
-import { hasPortfolioId, type SessionStore } from '../state.ts';
-import { toolError } from '../responses.ts';
 import {
-  registerTransaction,
-  type TransactionRegistrationIO,
-} from '../registration.ts';
+  defaultStateStore,
+  hasPortfolioId,
+  type StateStore,
+} from '../state.ts';
+import { registerTransaction } from '../registration.ts';
+import { toolError } from '../responses.ts';
 import type { AllocationMap, ToolResponse } from '../types.ts';
 
 const delay = (ms: number): Promise<void> =>
@@ -21,50 +22,66 @@ const makeFee = (gas: number = 2_500_000) => ({
   amount: [{ denom: 'ubld', amount: `${Math.round(gas * 0.03)}` }],
 });
 
+export interface SubmitAllocationOptions {
+  env: NodeJS.ProcessEnv;
+  fetch: typeof fetch;
+  setTimeout: typeof setTimeout;
+  now: () => Date;
+  stateStore?: StateStore;
+}
+
+function validateAllocations(allocations: AllocationMap): string | undefined {
+  for (const [key, value] of Object.entries(allocations)) {
+    if (!Number.isFinite(value)) {
+      return `allocation for ${key} must be a finite number`;
+    }
+    if (!Number.isInteger(value)) {
+      return `allocation for ${key} must be an integer percentage`;
+    }
+  }
+  return undefined;
+}
+
 export async function handleSubmitAllocation(
   allocations: AllocationMap,
-  io: {
-    fetch: typeof globalThis.fetch;
-    agoricNet: string;
-    state: Pick<SessionStore, 'getSession'>;
-    registration: TransactionRegistrationIO;
-  },
+  options: SubmitAllocationOptions,
 ): Promise<ToolResponse> {
-  const session = io.state.getSession();
-  if (!session) {
-    return toolError('no delegate state — call generate_delegate_key first');
+  const invalid = validateAllocations(allocations);
+  if (invalid) return toolError(invalid);
+
+  const stateStore = options.stateStore ?? defaultStateStore;
+  const activeDelegate = stateStore.getActiveDelegate();
+  if (!activeDelegate) {
+    return toolError('no active delegate — call generate_delegate_key first');
   }
-  if (!hasPortfolioId(session) || !session.delegationKeyName) {
+  if (!hasPortfolioId(activeDelegate) || !activeDelegate.delegationKeyName) {
     return toolError('no portfolio state — call redeem_invitation first');
   }
 
+  const fetch = options.fetch;
   const networkConfig = await fetchEnvNetworkConfig({
-    env: { AGORIC_NET: io.agoricNet },
-    fetch: io.fetch,
+    env: options.env,
+    fetch,
   });
-  const walletKit = await makeSmartWalletKit(
-    { fetch: io.fetch, delay },
-    networkConfig,
-  );
+  const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
 
   const ssk = await makeSigningSmartWalletKit(
     {
       connectWithSigner: SigningStargateClient.connectWithSigner,
       walletUtils: walletKit,
     },
-    session.mnemonic,
+    activeDelegate.mnemonic,
   );
 
   const store = reflectWalletStore(ssk, {
-    setTimeout: globalThis.setTimeout,
+    setTimeout: options.setTimeout,
     log: (...args: unknown[]) => console.error('-- wallet-store:', ...args),
-    makeNonce: () => new Date().toISOString(),
+    makeNonce: () => options.now().toISOString(),
     fee: makeFee(),
   });
 
-  // Read current sync state from published data
   const status = (await walletKit.readPublished(
-    `ymax0.portfolios.portfolio${session.portfolioId}`,
+    `ymax0.portfolios.portfolio${activeDelegate.portfolioId}`,
   )) as { policyVersion: number; rebalanceCount: number };
 
   const syncState = {
@@ -72,13 +89,11 @@ export async function handleSubmitAllocation(
     rebalanceCount: status.rebalanceCount,
   };
 
-  // Convert allocations to bigint map
   const targetAllocation: Record<string, bigint> = {};
   for (const [key, value] of Object.entries(allocations)) {
-    targetAllocation[key] = BigInt(Math.round(value)); // percentage points
+    targetAllocation[key] = BigInt(value);
   }
 
-  // Get the delegation client and submit
   const delegate = store.get<{
     setTargetAllocation: (opts: {
       targetAllocation: Record<string, bigint>;
@@ -88,7 +103,7 @@ export async function handleSubmitAllocation(
       tx: { code: number; rawLog?: string; transactionHash: string };
       invocationResult?: unknown;
     }>;
-  }>(session.delegationKeyName);
+  }>(activeDelegate.delegationKeyName);
 
   const result = await delegate.setTargetAllocation({
     targetAllocation,
@@ -101,13 +116,17 @@ export async function handleSubmitAllocation(
     );
   }
 
-  // Auto-register the transaction
   const flowKey = result.invocationResult
     ? String(result.invocationResult)
     : undefined;
   await registerTransaction({
     txHash: result.tx.transactionHash,
-  }, io.registration).catch((err: Error) =>
+    portfolioId: activeDelegate.portfolioId,
+    flowKey,
+  }, {
+    env: options.env,
+    fetch,
+  }).catch((err: Error) =>
     console.error('tx registration failed (non-fatal):', err.message),
   );
 

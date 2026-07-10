@@ -10,7 +10,7 @@ import {
   findPortfolioMandateInvitation,
   getPortfolioMandateDetails,
 } from '../invitation.ts';
-import type { SessionStore } from '../state.ts';
+import { defaultStateStore, type StateStore } from '../state.ts';
 import { toolError } from '../responses.ts';
 import type { ToolResponse } from '../types.ts';
 
@@ -22,26 +22,29 @@ const makeFee = (gas: number = 2_500_000) => ({
   amount: [{ denom: 'ubld', amount: `${Math.round(gas * 0.03)}` }],
 });
 
-export interface RedeemIO {
-  fetch: typeof globalThis.fetch;
-  agoricNet: string;
-  state: Pick<SessionStore, 'getSession' | 'updateSession'>;
+export interface RedeemOptions {
+  env: NodeJS.ProcessEnv;
+  fetch: typeof fetch;
+  setTimeout: typeof setTimeout;
+  now: () => Date;
+  stateStore?: StateStore;
 }
 
-export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
-  const session = io.state.getSession();
-  if (!session) {
-    return toolError('no delegate state — call generate_delegate_key first');
+export async function handleRedeem(
+  options: RedeemOptions,
+): Promise<ToolResponse> {
+  const stateStore = options.stateStore ?? defaultStateStore;
+  const activeDelegate = stateStore.getActiveDelegate();
+  if (!activeDelegate) {
+    return toolError('no active delegate — call generate_delegate_key first');
   }
 
+  const fetch = options.fetch;
   const networkConfig = await fetchEnvNetworkConfig({
-    env: { AGORIC_NET: io.agoricNet },
-    fetch: io.fetch,
+    env: options.env,
+    fetch,
   });
-  const walletKit = await makeSmartWalletKit(
-    { fetch: io.fetch, delay },
-    networkConfig,
-  );
+  const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
 
   const ymaxInstance = walletKit.agoricNames.instance['ymax0'];
   if (!ymaxInstance) {
@@ -53,7 +56,7 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
     invitation = await retryUntilCondition(
       async () => {
         const currentWalletRecord = await walletKit.getCurrentWalletRecord(
-          session.address,
+          activeDelegate.address,
         );
         return findPortfolioMandateInvitation(currentWalletRecord);
       },
@@ -62,7 +65,7 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
       {
         maxRetries: 30,
         retryIntervalMs: 5_000,
-        setTimeout: globalThis.setTimeout,
+        setTimeout: options.setTimeout,
         log: () => {},
       },
     );
@@ -79,19 +82,18 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
   const { portfolioId, agentId, permissions } =
     getPortfolioMandateDetails(invitation);
 
-  // Create signing wallet kit
   const ssk = await makeSigningSmartWalletKit(
     {
       connectWithSigner: SigningStargateClient.connectWithSigner,
       walletUtils: walletKit,
     },
-    session.mnemonic,
+    activeDelegate.mnemonic,
   );
 
   const store = reflectWalletStore(ssk, {
-    setTimeout: globalThis.setTimeout,
+    setTimeout: options.setTimeout,
     log: (...args: unknown[]) => console.error('-- wallet-store:', ...args),
-    makeNonce: () => new Date().toISOString(),
+    makeNonce: () => options.now().toISOString(),
     fee: makeFee(),
   });
 
@@ -102,7 +104,7 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
     { overwrite: true },
   );
 
-  io.state.updateSession({
+  stateStore.updateActiveDelegate({
     portfolioId,
     delegationKeyName,
   });

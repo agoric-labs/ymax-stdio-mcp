@@ -6,7 +6,9 @@ YDS is the read API for portfolio and instrument data. Base URL: `https://main0.
 
 - Call `generate_delegate_key`; the server creates, funds, and provisions the delegate wallet.
 - Never ask the user for a mnemonic or private key.
+- The MCP server stores the active delegate locally. Later tools use that active delegate without an extra bearer token.
 - Propose allocations through UI links. The user approves portfolio creation, funding, delegation, and owner edits in YMax.
+- Never create the portfolio yourself; only the user can do that on `main0.ymax.app`.
 - Use `submit_target_allocation` only after the delegation invitation has been redeemed.
 
 ## Delegation Model
@@ -21,7 +23,7 @@ YDS is the read API for portfolio and instrument data. Base URL: `https://main0.
 ## Run Order
 
 1. Query YDS, discuss risk, and propose an initial allocation.
-2. Call `generate_delegate_key`.
+2. Call `generate_delegate_key` with `clobberActiveDelegate: false` unless the user explicitly wants to replace an existing active delegate.
 3. Call `propose_create` with the proposed allocation map.
 4. Give the returned link to the user. They create, fund, and delegate in one UI flow.
 5. Call `redeem_invitation`; do not ask the user for a portfolio number.
@@ -29,7 +31,7 @@ YDS is the read API for portfolio and instrument data. Base URL: `https://main0.
 7. Use `submit_target_allocation` for autonomous changes.
 8. Use `propose_edit` when the user should approve an allocation or instrument-set change.
 
-For an existing portfolio, replace steps 3–4 with `propose_grant` and have the user complete the returned Grant link. Then continue with `redeem_invitation`; its invitation details identify the portfolio.
+For an existing portfolio, replace steps 3-4 with `propose_grant` and have the user complete the returned Grant link. Then continue with `redeem_invitation`; its invitation details identify the portfolio.
 
 Proposal tools intentionally forward allocation keys and numeric values without enforcing instrument membership, totals, or ranges. This lets agents exercise and observe UI boundary handling. The UI remains responsible for interpreting the proposal before the user approves it.
 
@@ -59,7 +61,7 @@ The default UI is the `Agoric/ymax-web#840` branch preview. Configure `YMAX_UI_U
 
 | Symptom | Likely cause | Remediation |
 |---|---|---|
-| No delegate state | Key generation has not completed | Call `generate_delegate_key` |
+| No active delegate | Key generation has not completed | Call `generate_delegate_key` |
 | Invitation not arriving | UI flow is incomplete or ran before provisioning | Complete or retry the combined UI flow |
 | Invalid invitation details | The delivered invitation is not the expected contract version | Inspect its `customDetails` and deployment versions |
 | Wallet not funded | Sponsor balance is insufficient or RPC is unavailable | Fund the sponsor or check `RPC_URL` |

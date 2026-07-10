@@ -1,4 +1,4 @@
-export interface SessionState {
+export interface DelegateState {
   mnemonic: string;
   address: string;
   portfolioId?: number;

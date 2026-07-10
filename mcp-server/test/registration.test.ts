@@ -3,128 +3,140 @@ import assert from 'node:assert/strict';
 import { registerTransaction } from '../src/registration.ts';
 
 const YDS_URL = 'https://main0.ymax.app';
-const TX_HASH = 'A'.repeat(64);
-const registrationIO = () => ({
-  fetch: globalThis.fetch,
-  ydsUrl: YDS_URL,
-  chainId: 'agoric-3',
-  ymaxInstance: 'ymax0',
+
+const options = (fetchImpl: typeof fetch) => ({
+  env: {},
+  fetch: fetchImpl,
 });
 
 test('registerTransaction calls fetch with correct URL and method', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    const calls: { url: string; options: RequestInit }[] = [];
-    globalThis.fetch = async (
-      url: string,
-      options: RequestInit,
-    ) => {
-      calls.push({ url, options });
-      return new Response(JSON.stringify({}), { status: 200 });
-    };
+  const calls: { url: string; options: RequestInit }[] = [];
+  const fetchMock = async (url: string, requestOptions: RequestInit) => {
+    calls.push({ url, options: requestOptions });
+    return new Response(JSON.stringify({}), { status: 200 });
+  };
 
-    await registerTransaction({ txHash: TX_HASH }, registrationIO());
+  await registerTransaction(
+    {
+      txHash: 'ABC123',
+      portfolioId: 84,
+    },
+    options(fetchMock as typeof fetch),
+  );
 
-    assert.strictEqual(calls.length, 1);
-    assert.strictEqual(calls[0].url, `${YDS_URL}/transactions`);
-    assert.strictEqual(calls[0].options.method, 'POST');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].url, `${YDS_URL}/transactions`);
+  assert.strictEqual(calls[0].options.method, 'POST');
 });
 
-test('registerTransaction sends the YDS transaction contract', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    const bodies: string[] = [];
-    globalThis.fetch = async (
-      _url: string,
-      options: RequestInit,
-    ) => {
-      bodies.push(options.body as string);
-      return new Response(JSON.stringify({}), { status: 200 });
-    };
+test('registerTransaction sends txHash and portfolioId in body', async () => {
+  const bodies: string[] = [];
+  const fetchMock = async (_url: string, requestOptions: RequestInit) => {
+    bodies.push(requestOptions.body as string);
+    return new Response(JSON.stringify({}), { status: 200 });
+  };
 
-    await registerTransaction({ txHash: TX_HASH }, registrationIO());
+  await registerTransaction(
+    {
+      txHash: 'ABC123',
+      portfolioId: 84,
+    },
+    options(fetchMock as typeof fetch),
+  );
 
-    const parsed = JSON.parse(bodies[0]);
-    assert.deepStrictEqual(parsed, {
-      txHash: TX_HASH,
-      chain: 'agoric-3',
-      ymaxInstance: 'ymax0',
-    });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  const parsed = JSON.parse(bodies[0]);
+  assert.strictEqual(parsed.txHash, 'ABC123');
+  assert.strictEqual(parsed.portfolioId, 84);
+  assert.strictEqual(parsed.flowKey, undefined);
+});
+
+test('registerTransaction includes flowKey when provided', async () => {
+  const bodies: string[] = [];
+  const fetchMock = async (_url: string, requestOptions: RequestInit) => {
+    bodies.push(requestOptions.body as string);
+    return new Response(JSON.stringify({}), { status: 200 });
+  };
+
+  await registerTransaction(
+    {
+      txHash: 'ABC123',
+      portfolioId: 84,
+      flowKey: 'flow6',
+    },
+    options(fetchMock as typeof fetch),
+  );
+
+  const parsed = JSON.parse(bodies[0]);
+  assert.strictEqual(parsed.flowKey, 'flow6');
 });
 
 test('registerTransaction returns success on 200', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({}), { status: 200 });
+  const fetchMock = async () =>
+    new Response(JSON.stringify({}), { status: 200 });
 
-    const result = await registerTransaction(
-      { txHash: TX_HASH },
-      registrationIO(),
-    );
+  const result = await registerTransaction(
+    {
+      txHash: 'ABC123',
+      portfolioId: 84,
+    },
+    options(fetchMock as typeof fetch),
+  );
 
-    assert.deepStrictEqual(result, { success: true });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert.deepStrictEqual(result, { success: true });
 });
 
 test('registerTransaction throws on HTTP error', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    globalThis.fetch = async () =>
-      new Response('not found', { status: 404 });
+  const fetchMock = async () =>
+    new Response('not found', { status: 404 });
 
-    await assert.rejects(
-      () => registerTransaction({ txHash: TX_HASH }, registrationIO()),
-      {
-        message: /Transaction registration failed \(404\)/,
-      },
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  await assert.rejects(
+    () =>
+      registerTransaction(
+        {
+          txHash: 'ABC123',
+          portfolioId: 84,
+        },
+        options(fetchMock as typeof fetch),
+      ),
+    {
+      message: /Transaction registration failed \(404\)/,
+    },
+  );
 });
 
 test('registerTransaction sends Content-Type header', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    const headers: Record<string, string>[] = [];
-    globalThis.fetch = async (
-      _url: string,
-      options: RequestInit,
-    ) => {
-      headers.push(options.headers as Record<string, string>);
-      return new Response(JSON.stringify({}), { status: 200 });
-    };
+  const headers: Record<string, string>[] = [];
+  const fetchMock = async (_url: string, requestOptions: RequestInit) => {
+    headers.push(requestOptions.headers as Record<string, string>);
+    return new Response(JSON.stringify({}), { status: 200 });
+  };
 
-    await registerTransaction({ txHash: TX_HASH }, registrationIO());
+  await registerTransaction(
+    {
+      txHash: 'ABC123',
+      portfolioId: 84,
+    },
+    options(fetchMock as typeof fetch),
+  );
 
-    assert.strictEqual(headers[0]['Content-Type'], 'application/json');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  assert.strictEqual(headers[0]['Content-Type'], 'application/json');
 });
 
 test('registerTransaction handles empty error body', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    globalThis.fetch = async () =>
-      new Response(null, { status: 500, statusText: 'Internal Server Error' });
+  const fetchMock = async () =>
+    new Response(null, { status: 500, statusText: 'Internal Server Error' });
 
-    await assert.rejects(
-      () => registerTransaction({ txHash: TX_HASH }, registrationIO()),
-      {
-        message: /Transaction registration failed \(500\)/,
-      },
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  await assert.rejects(
+    () =>
+      registerTransaction(
+        {
+          txHash: 'ABC123',
+          portfolioId: 84,
+        },
+        options(fetchMock as typeof fetch),
+      ),
+    {
+      message: /Transaction registration failed \(500\)/,
+    },
+  );
 });
