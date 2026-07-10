@@ -125,12 +125,21 @@ const server = new Server(
   {
     name: 'ymax-yield-agent',
     version: '0.1.0',
+    description:
+      'YMax yield agent for Agoric mainnet. Manages delegated cross-chain yield portfolio allocations on ymax0.',
   },
   {
     capabilities: {
       tools: {},
       resources: {},
     },
+    instructions: [
+      'Use generate_delegate_key to create a new delegate wallet (returns address for grant UI + bearer token).',
+      'After the user grants via the YMax UI, call redeem_invitation with the portfolio ID.',
+      'Then call submit_target_allocation to adjust instrument weights.',
+      'The solver enforces minimum transfer thresholds — consult solver-constraints resource for limits.',
+      'Provision must happen BEFORE grant. See provisioning-runbook resource.',
+    ].join('\n'),
   },
 );
 
