@@ -167,7 +167,7 @@ const server = new Server(
       resources: {},
     },
     instructions: [
-      'Use generate_delegate_key to create a new delegate wallet (returns address for grant UI + bearer token).',
+      'Use generate_delegate_key to create a new delegate wallet (returns address for grant UI + bearer token). Never display the bearer token to the user — it is a machine credential.',
       'After the user grants via the YMax UI, call redeem_invitation with the portfolio ID.',
       'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set — query via YDS to discover it.',
       'The solver enforces minimum transfer thresholds — consult solver-constraints resource for limits.',
@@ -182,7 +182,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'generate_delegate_key',
       description:
-        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. Returns the delegate address (for the grant UI) and a bearer token (for subsequent calls). The mnemonic is stored in the MCP server and never returned to the client.',
+        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. Returns the delegate address (for the grant UI) and a bearer token (for subsequent calls only — never display the token to the user). The mnemonic is stored in the MCP server and never returned to the client.',
       inputSchema: {
         type: 'object',
         properties: {},

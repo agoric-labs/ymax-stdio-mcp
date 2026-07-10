@@ -9,6 +9,7 @@ YDS (YMax Data Service) is the read API for portfolio and instrument data. Base 
 - You never create the portfolio yourself — only the user can do that on `main0.ymax.app`.
 - You propose the delegate grant. The user approves by completing the Grant flow in the YMax UI. You do not have access to the Grant UI.
 - Never ask the user for their mnemonic or private key.
+- **Never display the bearer token** in any response to the user. The token is for machine-to-machine auth only — treat it like a password. Never log it, echo it, or include it in summaries.
 
 ## Delegation Model
 
