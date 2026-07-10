@@ -118,7 +118,40 @@ const PROVISIONING_RUNBOOK = {
     '4. submit_target_allocation — allocate (repeat as needed)',
     '',
     'Order matters: provision BEFORE grant. A grant before provisioning produces a revoked agent.',
+    '',
+    'For complete onboarding instructions, read the ymax-onboarding resource.',
   ].join('\n'),
+};
+
+const RESOURCES_DIR = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  'resources',
+);
+
+function readResource(filename: string): string {
+  const path = resolve(RESOURCES_DIR, filename);
+  if (!existsSync(path)) {
+    throw new Error(`resource file not found: ${path}`);
+  }
+  return readFileSync(path, 'utf8');
+}
+
+const ONBOARDING_SKILL = {
+  uri: 'ymax-onboarding',
+  name: 'YMax Agent Onboarding',
+  description:
+    'Complete onboarding guide: role boundaries, URL conventions, run order, failure triage, and reporting template. Read this when starting a new onboarding flow.',
+  mimeType: 'text/markdown',
+  text: readResource('onboarding.md'),
+};
+
+const ALLOCATION_SKILL = {
+  uri: 'ymax-allocation-delegate',
+  name: 'YMax Allocation Delegate',
+  description:
+    'Complete allocation delegate guide: scope, guardrails, candidate building heuristics, minimum transfer thresholds, verification protocol, and retry/escalation rules. Read this before submitting allocation changes.',
+  mimeType: 'text/markdown',
+  text: readResource('allocation.md'),
 };
 
 const server = new Server(
@@ -136,9 +169,10 @@ const server = new Server(
     instructions: [
       'Use generate_delegate_key to create a new delegate wallet (returns address for grant UI + bearer token).',
       'After the user grants via the YMax UI, call redeem_invitation with the portfolio ID.',
-      'Then call submit_target_allocation to adjust instrument weights.',
+      'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set — query via YDS to discover it.',
       'The solver enforces minimum transfer thresholds — consult solver-constraints resource for limits.',
-      'Provision must happen BEFORE grant. See provisioning-runbook resource.',
+      'Provision must happen BEFORE grant. See provisioning-runbook and ymax-onboarding resources for the full run order.',
+      'Before submitting an allocation, read ymax-allocation-delegate for guardrails, candidate-building heuristics, and escalation rules.',
     ].join('\n'),
   },
 );
@@ -216,51 +250,44 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+const ALL_RESOURCES = [
+  SOLVER_CONSTRAINTS,
+  PROVISIONING_RUNBOOK,
+  ONBOARDING_SKILL,
+  ALLOCATION_SKILL,
+];
+
+const RESOURCE_BY_URI: Record<string, typeof SOLVER_CONSTRAINTS> = {};
+for (const r of ALL_RESOURCES) {
+  RESOURCE_BY_URI[r.uri] = r;
+}
+
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: [
-    {
-      uri: SOLVER_CONSTRAINTS.uri,
-      name: SOLVER_CONSTRAINTS.name,
-      description: SOLVER_CONSTRAINTS.description,
-      mimeType: SOLVER_CONSTRAINTS.mimeType,
-    },
-    {
-      uri: PROVISIONING_RUNBOOK.uri,
-      name: PROVISIONING_RUNBOOK.name,
-      description: PROVISIONING_RUNBOOK.description,
-      mimeType: PROVISIONING_RUNBOOK.mimeType,
-    },
-  ],
+  resources: ALL_RESOURCES.map(r => ({
+    uri: r.uri,
+    name: r.name,
+    description: r.description,
+    mimeType: r.mimeType,
+  })),
 }));
 
 server.setRequestHandler(ReadResourceRequestSchema, async request => {
   const { uri } = request.params;
+  const resource = RESOURCE_BY_URI[uri];
 
-  if (uri === SOLVER_CONSTRAINTS.uri) {
-    return {
-      contents: [
-        {
-          uri: SOLVER_CONSTRAINTS.uri,
-          mimeType: SOLVER_CONSTRAINTS.mimeType,
-          text: SOLVER_CONSTRAINTS.text,
-        },
-      ],
-    };
+  if (!resource) {
+    throw new Error(`unknown resource: ${uri}`);
   }
 
-  if (uri === PROVISIONING_RUNBOOK.uri) {
-    return {
-      contents: [
-        {
-          uri: PROVISIONING_RUNBOOK.uri,
-          mimeType: PROVISIONING_RUNBOOK.mimeType,
-          text: PROVISIONING_RUNBOOK.text,
-        },
-      ],
-    };
-  }
-
-  throw new Error(`unknown resource: ${uri}`);
+  return {
+    contents: [
+      {
+        uri: resource.uri,
+        mimeType: resource.mimeType,
+        text: resource.text,
+      },
+    ],
+  };
 });
 
 const log = (...args: unknown[]) =>
