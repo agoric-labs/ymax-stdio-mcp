@@ -1,5 +1,35 @@
 import '@endo/init';
 
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Load .env file before any other imports that read process.env
+const envPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '.env',
+);
+if (existsSync(envPath)) {
+  const text = readFileSync(envPath, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    let key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (key.startsWith('export ')) key = key.slice(7);
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {

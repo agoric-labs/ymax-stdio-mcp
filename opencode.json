@@ -2,5 +2,16 @@
   "$schema": "https://opencode.ai/config.json",
   "agent": {
     "defi-expert": {}
+  },
+  "mcpServers": {
+    "ymax-yield-agent": {
+      "command": "npx",
+      "args": ["tsx", "mcp-server/src/server.ts"],
+      "env": {
+        "SPONSOR_MNEMONIC": "${SPONSOR_MNEMONIC}",
+        "SPONSOR_PRIVATE_KEY": "${SPONSOR_PRIVATE_KEY}",
+        "RPC_URL": "${RPC_URL}"
+      }
+    }
   }
 }
