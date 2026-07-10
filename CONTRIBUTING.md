@@ -2,18 +2,14 @@
 
 ## Agoric SDK Setup
 
-This workspace uses a git worktree of `~/repo/agoric-sdk` on the `dc-agent-skill` branch.
+This workspace requires a built agoric-sdk worktree at `./agoric-sdk/` for the MCP server's local package dependencies (`@agoric/client-utils`, `@agoric/cosmic-proto`, etc.).
 
 ### Initial Setup
 
 ```sh
-# Ensure the remote branch is fetched and a local tracking branch exists
+# Add a worktree from your agoric-sdk checkout
 cd ~/repo/agoric-sdk
-git fetch origin dc-agent-skill
-git branch dc-agent-skill origin/dc-agent-skill
-
-# Add the worktree under yield1
-git worktree add /Users/connolly/Documents/yield1/agoric-sdk dc-agent-skill
+git worktree add /Users/connolly/Documents/yield1/agoric-sdk <branch-or-tag>
 ```
 
 ### Build
