@@ -3,6 +3,7 @@ import {
   makeSmartWalletKit,
   makeSigningSmartWalletKit,
   reflectWalletStore,
+  retryUntilCondition,
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { getSession, updateSession } from '../state.ts';
@@ -38,22 +39,28 @@ export async function handleRedeem(
     };
   }
 
-  // Poll for the portfolioMandate invitation
-  let invitation: { description: string } | undefined;
-  const maxRetries = 30;
-  for (let i = 0; i < maxRetries; i++) {
-    const state = await walletKit.storedWalletState(session.address);
-    for (const inv of state.invitationsReceived.values()) {
-      if (
-        inv.description === `portfolioMandate` &&
-        JSON.stringify(inv.instance) === JSON.stringify(ymaxInstance)
-      ) {
-        invitation = inv;
-        break;
-      }
-    }
-    if (invitation) break;
-    await delay(5_000);
+  let invitation;
+  try {
+    invitation = await retryUntilCondition(
+      async () => {
+        const state = await walletKit.storedWalletState(session.address);
+        return [...state.invitationsReceived.values()].find(
+          candidate =>
+            candidate.description === 'portfolioMandate' &&
+            JSON.stringify(candidate.instance) === JSON.stringify(ymaxInstance),
+        );
+      },
+      candidate => candidate !== undefined,
+      'portfolioMandate invitation',
+      {
+        maxRetries: 30,
+        retryIntervalMs: 5_000,
+        setTimeout: globalThis.setTimeout,
+        log: () => {},
+      },
+    );
+  } catch {
+    // Empty vstorage and other transient read errors are retried above.
   }
 
   if (!invitation) {
