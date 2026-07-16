@@ -371,7 +371,12 @@ server.setRequestHandler(
           const { allocations } = args as {
             allocations: Record<string, number>;
           };
-          const res = await handleSubmitAllocation(allocations);
+          const res = await handleSubmitAllocation(allocations, {
+            fetch: globalThis.fetch,
+            ydsUrl: process.env.YDS_URL || 'https://main0.ymax.app',
+            chainId: process.env.CHAIN_ID || 'agoric-3',
+            ymaxInstance: process.env.YMAX_INSTANCE || 'ymax0',
+          });
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }

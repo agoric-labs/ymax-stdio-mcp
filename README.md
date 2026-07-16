@@ -29,6 +29,9 @@ cp .env.example .env
 | `RPC_URL` | No | Agoric RPC endpoint (defaults to mainnet) |
 | `SPONSOR_AMOUNT` | No | BLD to send per delegate (default `20000000` = 20 BLD) |
 | `YMAX_UI_URL` | No | YMax UI for proposal links (defaults to the agentic UI preview) |
+| `YDS_URL` | No | YDS endpoint used to register submitted transactions |
+| `CHAIN_ID` | No | Chain identifier sent to YDS (default `agoric-3`) |
+| `YMAX_INSTANCE` | No | YMax instance sent to YDS (default `ymax0`) |
 
 ## Start
 

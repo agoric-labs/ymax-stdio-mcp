@@ -6,7 +6,10 @@ import {
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { getSession } from '../state.ts';
-import { registerTransaction } from '../registration.ts';
+import {
+  registerTransaction,
+  type TransactionRegistrationIO,
+} from '../registration.ts';
 import type { AllocationMap, ToolResponse } from '../types.ts';
 
 const delay = (ms: number): Promise<void> =>
@@ -19,6 +22,7 @@ const makeFee = (gas: number = 2_500_000) => ({
 
 export async function handleSubmitAllocation(
   allocations: AllocationMap,
+  registrationIO: TransactionRegistrationIO,
 ): Promise<ToolResponse> {
   const session = getSession();
   if (!session) {
@@ -111,9 +115,7 @@ export async function handleSubmitAllocation(
     : undefined;
   await registerTransaction({
     txHash: result.tx.transactionHash,
-    portfolioId: session.portfolioId,
-    flowKey,
-  }).catch((err: Error) =>
+  }, registrationIO).catch((err: Error) =>
     console.error('tx registration failed (non-fatal):', err.message),
   );
 

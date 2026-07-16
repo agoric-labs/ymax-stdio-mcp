@@ -1,22 +1,24 @@
-const YDS_URL = process.env.YDS_URL || 'https://main0.ymax.app';
+export interface TransactionRegistrationIO {
+  fetch: typeof globalThis.fetch;
+  ydsUrl: string;
+  chainId: string;
+  ymaxInstance: string;
+}
 
-export async function registerTransaction(params: {
-  txHash: string;
-  portfolioId: number;
-  flowKey?: string;
-}): Promise<{ success: boolean }> {
-  const { txHash, portfolioId, flowKey } = params;
+export async function registerTransaction(
+  params: { txHash: string },
+  io: TransactionRegistrationIO,
+): Promise<{ success: boolean }> {
+  const { txHash } = params;
 
-  const body: Record<string, unknown> = {
-    txHash,
-    portfolioId,
-  };
-  if (flowKey) body.flowKey = flowKey;
-
-  const response = await fetch(`${YDS_URL}/transactions`, {
+  const response = await io.fetch(`${io.ydsUrl}/transactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      txHash,
+      chain: io.chainId,
+      ymaxInstance: io.ymaxInstance,
+    }),
   });
 
   if (!response.ok) {
