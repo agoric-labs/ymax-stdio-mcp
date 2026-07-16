@@ -5,7 +5,7 @@ import {
   reflectWalletStore,
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
-import type { SessionStore } from '../state.ts';
+import { hasPortfolioId, type SessionStore } from '../state.ts';
 import {
   registerTransaction,
   type TransactionRegistrationIO,
@@ -40,7 +40,7 @@ export async function handleSubmitAllocation(
       ],
     };
   }
-  if (!session.portfolioId || !session.delegationKeyName) {
+  if (!hasPortfolioId(session) || !session.delegationKeyName) {
     return {
       content: [
         {

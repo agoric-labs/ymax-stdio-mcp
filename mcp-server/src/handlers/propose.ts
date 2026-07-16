@@ -3,7 +3,7 @@ import {
   buildEditProposalUrl,
   buildGrantProposalUrl,
 } from '../proposals.ts';
-import type { SessionStore } from '../state.ts';
+import { hasPortfolioId, type SessionStore } from '../state.ts';
 import type { ProposalParams, ToolResponse } from '../types.ts';
 
 export async function handleProposeCreate(
@@ -77,7 +77,7 @@ export async function handleProposeEdit(
   ymaxUiUrl: string,
 ): Promise<ToolResponse> {
   const session = state.getSession();
-  if (!session?.portfolioId) {
+  if (!session || !hasPortfolioId(session)) {
     return {
       content: [
         {

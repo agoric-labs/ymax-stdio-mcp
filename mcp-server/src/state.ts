@@ -51,6 +51,11 @@ export interface SessionStore {
   updateSession: (updates: Partial<SessionState>) => boolean;
 }
 
+export const hasPortfolioId = (
+  session: SessionState,
+): session is SessionState & { portfolioId: number } =>
+  session.portfolioId !== undefined;
+
 export function makeSessionStore(file: string): SessionStore {
   const data = load(file);
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { unlinkSync } from 'node:fs';
 
 const testStateFile = `/tmp/ymax-mcp-state-test-${process.pid}.json`;
-const { makeSessionStore } = await import('../src/state.ts');
+const { hasPortfolioId, makeSessionStore } = await import('../src/state.ts');
 const { getSession, setSession, updateSession } =
   makeSessionStore(testStateFile);
 
@@ -47,4 +47,11 @@ test('updateSession adds portfolio binding', () => {
     portfolioId: 84,
     delegationKeyName: 'delegate-portfolio84',
   });
+});
+
+test('portfolio zero is a valid portfolio binding', () => {
+  assert.strictEqual(
+    hasPortfolioId({ mnemonic: 'mnemonic', address: 'addr', portfolioId: 0 }),
+    true,
+  );
 });
