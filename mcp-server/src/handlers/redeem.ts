@@ -8,6 +8,7 @@ import {
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { getPortfolioMandateDetails } from '../invitation.ts';
 import type { SessionStore } from '../state.ts';
+import { toolError } from '../responses.ts';
 import type { ToolResponse } from '../types.ts';
 
 const delay = (ms: number): Promise<void> =>
@@ -27,14 +28,7 @@ export interface RedeemIO {
 export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
   const session = io.state.getSession();
   if (!session) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no delegate state — call generate_delegate_key first',
-        },
-      ],
-    };
+    return toolError('no delegate state — call generate_delegate_key first');
   }
 
   const networkConfig = await fetchEnvNetworkConfig({
@@ -48,9 +42,7 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
 
   const ymaxInstance = walletKit.agoricNames.instance['ymax0'];
   if (!ymaxInstance) {
-    return {
-      content: [{ type: 'text', text: 'contract ymax0 not found in agoricNames' }],
-    };
+    return toolError('contract ymax0 not found in agoricNames');
   }
 
   let invitation;
@@ -78,14 +70,9 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
   }
 
   if (!invitation) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no portfolioMandate invitation detected after polling — has the grant been completed?',
-        },
-      ],
-    };
+    return toolError(
+      'no portfolioMandate invitation detected after polling — has the grant been completed?',
+    );
   }
 
   const { portfolioId, agentId, permissions } =

@@ -6,6 +6,7 @@ import {
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { hasPortfolioId, type SessionStore } from '../state.ts';
+import { toolError } from '../responses.ts';
 import {
   registerTransaction,
   type TransactionRegistrationIO,
@@ -31,24 +32,10 @@ export async function handleSubmitAllocation(
 ): Promise<ToolResponse> {
   const session = io.state.getSession();
   if (!session) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no delegate state — call generate_delegate_key first',
-        },
-      ],
-    };
+    return toolError('no delegate state — call generate_delegate_key first');
   }
   if (!hasPortfolioId(session) || !session.delegationKeyName) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no portfolio state — call redeem_invitation first',
-        },
-      ],
-    };
+    return toolError('no portfolio state — call redeem_invitation first');
   }
 
   const networkConfig = await fetchEnvNetworkConfig({
@@ -109,14 +96,9 @@ export async function handleSubmitAllocation(
   });
 
   if (result.tx.code !== 0) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `invokeEntry failed (${result.tx.code}): ${result.tx.rawLog}`,
-        },
-      ],
-    };
+    return toolError(
+      `invokeEntry failed (${result.tx.code}): ${result.tx.rawLog}`,
+    );
   }
 
   // Auto-register the transaction

@@ -4,6 +4,7 @@ import {
   buildGrantProposalUrl,
 } from '../proposals.ts';
 import { hasPortfolioId, type SessionStore } from '../state.ts';
+import { toolError } from '../responses.ts';
 import type { ProposalParams, ToolResponse } from '../types.ts';
 
 export async function handleProposeCreate(
@@ -13,14 +14,7 @@ export async function handleProposeCreate(
 ): Promise<ToolResponse> {
   const session = state.getSession();
   if (!session) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no delegate state — call generate_delegate_key first',
-        },
-      ],
-    };
+    return toolError('no delegate state — call generate_delegate_key first');
   }
 
   return {
@@ -47,14 +41,7 @@ export async function handleProposeGrant(
 ): Promise<ToolResponse> {
   const session = state.getSession();
   if (!session) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no delegate state — call generate_delegate_key first',
-        },
-      ],
-    };
+    return toolError('no delegate state — call generate_delegate_key first');
   }
 
   return {
@@ -78,14 +65,7 @@ export async function handleProposeEdit(
 ): Promise<ToolResponse> {
   const session = state.getSession();
   if (!session || !hasPortfolioId(session)) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: 'no portfolio state — call redeem_invitation first',
-        },
-      ],
-    };
+    return toolError('no portfolio state — call redeem_invitation first');
   }
 
   return {

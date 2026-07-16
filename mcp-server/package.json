@@ -6,7 +6,7 @@
   "scripts": {
     "start": "npx tsx src/server.ts",
     "dev": "npx tsx watch src/server.ts",
-    "test": "node --import tsx --test 'test/state.test.ts' 'test/registration.test.ts' 'test/proposals.test.ts' 'test/invitation.test.ts' 'test/sponsor.test.ts'"
+    "test": "node --import tsx --test 'test/state.test.ts' 'test/registration.test.ts' 'test/proposals.test.ts' 'test/invitation.test.ts' 'test/sponsor.test.ts' 'test/responses.test.ts'"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",

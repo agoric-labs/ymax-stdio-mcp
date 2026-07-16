@@ -48,6 +48,7 @@ import {
 import { handleRedeem } from './handlers/redeem.ts';
 import { handleSubmitAllocation } from './handlers/submit-allocation.ts';
 import { DEFAULT_STATE_FILE, makeSessionStore } from './state.ts';
+import { toolError } from './responses.ts';
 import type { ToolResponse } from './types.ts';
 
 const RPC_URL = process.env.RPC_URL || 'https://main.rpc.agoric.net:443';
@@ -417,19 +418,13 @@ server.setRequestHandler(
 
         default:
           log(`tool unknown: ${name}`);
-          return {
-            content: [
-              { type: 'text', text: `unknown tool: ${name}` },
-            ],
-          };
+          return toolError(`unknown tool: ${name}`);
       }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'internal server error';
       log(`tool err: ${name} (${Date.now() - started}ms) — ${message}`);
-      return {
-        content: [{ type: 'text', text: message }],
-      };
+      return toolError(message);
     }
   },
 );

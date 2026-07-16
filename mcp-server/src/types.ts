@@ -15,5 +15,6 @@ export interface ProposalParams {
 
 export interface ToolResponse {
   content: { type: 'text'; text: string }[];
+  isError?: boolean;
   _meta?: Record<string, unknown>;
 }
