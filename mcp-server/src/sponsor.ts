@@ -1,4 +1,7 @@
-import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing';
+import {
+  DirectSecp256k1HdWallet,
+  DirectSecp256k1Wallet,
+} from '@cosmjs/proto-signing';
 import { SigningStargateClient, type StdFee } from '@cosmjs/stargate';
 import { stringToPath } from '@cosmjs/crypto';
 import { coins } from '@cosmjs/amino';
@@ -19,7 +22,7 @@ export const makeFundingCoins = (amount: string) => coins(amount, 'ubld');
 
 function makeSponsorWallet(
   config: SponsorConfig,
-): Promise<DirectSecp256k1HdWallet> {
+): Promise<DirectSecp256k1HdWallet | DirectSecp256k1Wallet> {
   const { mnemonic, privateKey } = config;
 
   if (mnemonic && privateKey) {
@@ -36,7 +39,7 @@ function makeSponsorWallet(
       ? privateKey.slice(2)
       : privateKey;
     const bytes = Uint8Array.from(Buffer.from(hex, 'hex'));
-    return DirectSecp256k1HdWallet.fromKey(bytes, 'agoric');
+    return DirectSecp256k1Wallet.fromKey(bytes, 'agoric');
   }
   return fail('set SPONSOR_MNEMONIC or SPONSOR_PRIVATE_KEY');
 }
