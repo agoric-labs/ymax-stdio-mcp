@@ -13,15 +13,11 @@ This document defines an MCP (Model Context Protocol) server for a delegated YMa
 
 ### Core principle: read side is YDS
 
-The client (LLM) reads portfolio state, instrument APYs, flow status, and delegation data directly from [YDS (YMax Data Service)](https://main0.ymax.app/openapi.json). The MCP server handles only **write/action operations** that require a signing key.
+The client (LLM) reads portfolio state, instrument APYs, flow status, and delegation data directly from [YDS (YMax Data Service)](https://main0.ymax.app/openapi.json). The MCP server builds UI proposals and performs operations that require its signing key.
 
 ### Mnemonic isolation
 
-The mnemonic is generated inside the MCP server and **never exposed to the client**. The client authenticates subsequent calls with a bearer token returned at key-generation time. The MCP may serve a single user.
-
-### Bearer token rotation
-
-Tokens can be rotated at any time via `rotate_token`. The old token is immediately invalidated; all server state (mnemonic, portfolio bindings, delegation keys) is preserved under the new token.
+The mnemonic is generated inside the MCP server and **never exposed to the client**. The MCP serves one local user and keeps one delegate session in private persisted state.
 
 ---
 
@@ -30,10 +26,9 @@ Tokens can be rotated at any time via `rotate_token`. The old token is immediate
 | Concern | Control |
 |---|---|
 | Mnemonic storage | Generated internally; never returned to client |
-| Auth | Bearer token returned by `generate_delegate_key`; required on all subsequent calls |
-| Token rotation | `rotate_token` invalidates old token, issues new one; state preserved |
-| Filesystem | `.secrets/` directory gitignored, `chmod 600` |
-| Delegate scope | `{ allocation: true }` only — cannot create positions, deposit, withdraw, or add new instruments |
+| Process boundary | The local MCP process owns the single delegate session |
+| Filesystem | State file is gitignored and written with mode `0600` |
+| Delegate scope | `{ allocation: true }`; authority follows the portfolio's current instrument key set |
 | Sponsor wallet | Configured at startup via env; funds delegates automatically |
 | Transaction signing | Delegation key held in MCP memory; no external signer |
 
@@ -43,18 +38,17 @@ Tokens can be rotated at any time via `rotate_token`. The old token is immediate
 
 ### 1. `generate_delegate_key`
 
-Creates a new delegate key pair, funds the address from the MCP's sponsor BLD wallet, and provisions the smart wallet. The delegate is fully ready for a grant — the user receives the address and a bearer token for subsequent calls.
+Creates a new delegate key pair, funds the address from the MCP's sponsor BLD wallet, and provisions the smart wallet. The delegate is fully ready for a grant.
 
 **Request:**
 ```
-No arguments (auth not yet established)
+No arguments
 ```
 
 **Response:**
 ```
 {
-  "address": "agoric1rfdl83r4rmnly6jwa9mywuaj9kqc6wcw3h9wva",
-  "bearerToken": "tok_..."
+  "address": "agoric1rfdl83r4rmnly6jwa9mywuaj9kqc6wcw3h9wva"
 }
 ```
 
@@ -72,16 +66,19 @@ No arguments (auth not yet established)
 
 ---
 
-### 2. `redeem_invitation`
+### 2. `propose_create`
 
-Polls for the delivered `portfolioMandate` invitation (after the user completes the grant via YMax UI) and redeems it, saving the delegation key in the wallet store under the conventional name `delegate-portfolio{NN}`. Saves the portfolio ID and delegation key name in MCP server state so subsequent calls don't need them.
+Builds a `/create-portfolio` link containing the proposed allocations, delegate address, and allocation permission. The user creates, funds, and delegates in one UI flow. Allocation keys and values are forwarded without range, total, or instrument validation so agents can exercise UI boundary behavior.
+
+---
+
+### 3. `redeem_invitation`
+
+Polls for the delivered `portfolioMandate` invitation and redeems it, saving the delegation key under `delegate-portfolio{NN}`. The portfolio ID, agent ID, and permissions come from the invitation's custom details.
 
 **Request:**
 ```
-{
-  "bearerToken": "tok_...",
-  "portfolioId": 84
-}
+No arguments
 ```
 
 **Response:**
@@ -96,10 +93,11 @@ Polls for the delivered `portfolioMandate` invitation (after the user completes 
 ```
 
 **Implementation notes:**
-- Polls the smart wallet's vstorage for an invitation with `description: "portfolioMandate"` for the given `portfolioId`
+- Polls the smart wallet for an invitation with `description: "portfolioMandate"`
+- Reads `{ portfolioId, agentId, permissions }` from the invitation
 - Redeems using the stored mnemonic via `wallet-store.ts` `executeOffer` pattern (see [onboarding report §Grant Retry And Redemption](./ymax-agent-onboarding-experience-report.md#grant-retry-and-redemption))
 - Saves result as `delegate-portfolio{NN}` with `overwrite: true`
-- Saves `{ portfolioId, delegationKeyName }` in MCP server state under the bearer token
+- Saves `{ portfolioId, delegationKeyName }` in MCP server state
 - The `delegate-portfolio{NN}` naming convention is required by `delegated-set-target-allocation.ts` ([skill reference](./agoric-sdk/packages/portfolio-deploy/skills/ymax-agoric-allocation-delegate/references/set-target-allocation.md))
 
 **Errors:**
@@ -108,14 +106,19 @@ Polls for the delivered `portfolioMandate` invitation (after the user completes 
 
 ---
 
-### 3. `submit_target_allocation`
+### 4. `propose_edit`
+
+Builds an `/edit-portfolio` link for owner approval. Instruments the owner includes in the resulting portfolio become part of its effective mandate. Like `propose_create`, it forwards allocation keys and values without policy validation.
+
+---
+
+### 5. `submit_target_allocation`
 
 Submits a `setTargetAllocation` transaction signed by the stored delegation key. Automatically registers the transaction hash via `POST /transactions` to bridge the activity-page visibility gap. Uses the portfolio ID and delegation key name saved during `redeem_invitation`.
 
 **Request:**
 ```
 {
-  "bearerToken": "tok_...",
   "allocations": {
     "ClearstarReactor": 40,
     "HyperithmDegen": 23,
@@ -146,38 +149,8 @@ Submits a `setTargetAllocation` transaction signed by the stored delegation key.
 - Registration is necessary because delegated submissions do not appear on the YMax activity page ([target allocation report Finding #4](./experience-report-target-allocation.md#4-activity-page-never-reflects-delegated-submissions), [iterative tweaks report Finding #6](./experience-report-iterative-allocation-tweaks.md#6-activity-page-still-doesnt-reflect-delegated-submissions))
 
 **Errors:**
-- Bearer token unknown → `"unauthorized"`
-- No prior `redeem_invitation` for this token → `"no portfolio state — call redeem_invitation first"`
+- No prior `redeem_invitation` → `"no portfolio state — call redeem_invitation first"`
 - Solver rejects → `"Nothing to do for this operation"` (deltas too small) or `"No feasible solution"` (cross-chain routing infeasible)
-
----
-
-### 4. `rotate_token`
-
-Invalidates the current bearer token and issues a new one. All server state (mnemonic, portfolio bindings, delegation key references) is preserved under the new token — on-chain state is unaffected. Use when the current token is compromised or as a routine precaution.
-
-**Request:**
-```
-{
-  "bearerToken": "tok_..."
-}
-```
-
-**Response:**
-```
-{
-  "newBearerToken": "tok_..."
-}
-```
-
-**Implementation notes:**
-- Generates a new bearer token and associates it with the existing server state
-- The old token is immediately removed from the valid-token index
-- No chain interaction — the mnemonic and delegation key on-chain are unchanged
-- Any in-flight operations using the old token will fail with `"unauthorized"` on subsequent status checks
-
-**Errors:**
-- Bearer token unknown → `"unauthorized"`
 
 ---
 
@@ -207,9 +180,10 @@ Static reference documenting the multi-layer minimum transfer thresholds discove
 Correct ordering derived from the onboarding report's painful lesson (grant-before-provisioning created `agent1` in revoked state):
 
 1. `generate_delegate_key` — keygen + fund + provision (single atomic MCP tool)
-2. User completes YMax grant via UI using the returned address
-3. `redeem_invitation` — poll + redeem + save state
-4. `submit_target_allocation` — allocate (repeat as needed)
+2. `propose_create` — combined create-and-delegate link
+3. User completes one YMax UI flow
+4. `redeem_invitation` — derive binding, redeem, and save state
+5. `submit_target_allocation` — allocate (repeat as needed)
 
 ---
 
@@ -227,10 +201,12 @@ mcp-server/
     server.ts            # MCP entrypoint: tool registration, request dispatch
     handlers/
       generate-key.ts    # generate_delegate_key — tool def, input schema, impl
+      propose.ts         # propose_create and propose_edit UI links
       redeem.ts          # redeem_invitation — tool def, input schema, impl
       submit-allocation.ts  # submit_target_allocation — tool def, input schema, impl
-      rotate-token.ts    # rotate_token — tool def, input schema, impl
-    state.ts             # In-memory session store (bearer token → { mnemonic, portfolioId, delegationKeyName })
+    proposals.ts         # Pure proposal URL builders
+    invitation.ts        # Invitation detail extraction
+    state.ts             # Single-user persisted delegate state
     sponsor.ts           # Sponsor wallet: key management, balance check, BLD transfer
     provision.ts         # Smart-wallet MsgProvision logic
     registration.ts      # POST /transactions activity-page bridge
@@ -251,17 +227,17 @@ The server depends on packages from the agoric-sdk worktree for:
 | Decision | Rationale | Source |
 |---|---|---|
 | Mnemonic stays in MCP | Never expose the signing key to the LLM context | Onboarding report: "never paste mnemonic into chat" |
-| Bearer token auth | Links operations to a session without exposing key material | Onboarding report security practices |
+| Single local session | Keeps key material behind the MCP process boundary | Local single-user deployment |
 | Single-struct args for `setTargetAllocation` | Two positional args collapse through marshal layer | Target allocation report Finding #2 |
 | Auto-derive `delegate-portfolio{NN}` | Convention required by `delegated-set-target-allocation.ts` | Both skill docs, all three delegation reports |
+| Derive portfolio ID from invitation | Avoids user input and binds the saved capability to its actual portfolio | `portfolioMandate` custom details |
 | Agent address vs delegate address | The agent address is derived from the mnemonic; the delegate address receives the grant | Delegate address is used for the grant link |
 | Poll for invitation after grant | The invitation may not be available immediately after provisioning | Onboarding report: user retried grant after provisioning |
 | `overwrite: true` on redeem | A first attempt may create a stale `agent1` in revoked state | Onboarding report: first grant before provisioning |
 | No query tools | YDS handles reads; MCP is action-only | Per requirement |
-| No validation tool | Client applies constraint knowledge from resources | Per requirement |
+| Proposal values forwarded as-is | Lets agents exercise UI boundary behavior | Per requirement |
 | Sponsor wallet funded at MCP startup | Eliminates manual BLD funding step from onboarding | Onboarding report: "fund the delegate address" was a manual hiccup |
 | Auto-register transactions | Activity page ignores delegated submissions | Target allocation report Finding #4, iterative tweaks report Finding #6 |
-| Bearer token rotation | Limit blast radius of a leaked token without changing on-chain keys | Security best practice |
 
 ---
 
@@ -276,4 +252,4 @@ The server depends on packages from the agoric-sdk worktree for:
 | `"too small to relay"` | CCTP bridge leg < $1.00 | Increase the cross-chain allocation; combine with other funds |
 | `"insufficient sponsor BLD"` | Sponsor wallet balance depleted | Fund the sponsor wallet |
 | `"no portfolioMandate invitation detected"` | Grant not yet completed, or polling timeout | Verify user completed the grant via YMax UI for the correct portfolio |
-| `"unauthorized"` | Bearer token invalid or rotated | Re-authenticate via `generate_delegate_key` or use a newly rotated token |
+| `"no delegate state"` | Delegate wallet has not been generated | Call `generate_delegate_key` |

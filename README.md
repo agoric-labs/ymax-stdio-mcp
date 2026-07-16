@@ -1,6 +1,6 @@
 # YMax Yield Agent — MCP Server
 
-MCP server for a delegated YMax allocation agent on Agoric mainnet. Wraps key generation, smart-wallet provisioning, invitation redemption, and target-allocation submission as MCP tools.
+MCP server for a delegated YMax allocation agent on Agoric mainnet. It builds owner-approval links and wraps key generation, smart-wallet provisioning, invitation redemption, and delegated allocation submission as MCP tools.
 
 ## Prerequisites
 
@@ -28,6 +28,7 @@ cp .env.example .env
 | `SPONSOR_MNEMONIC` or `SPONSOR_PRIVATE_KEY` | Yes | Seed for the BLD wallet that funds new delegates |
 | `RPC_URL` | No | Agoric RPC endpoint (defaults to mainnet) |
 | `SPONSOR_AMOUNT` | No | BLD to send per delegate (default `20000000` = 20 BLD) |
+| `YMAX_UI_URL` | No | YMax UI for proposal links (defaults to the agentic UI preview) |
 
 ## Start
 
@@ -53,9 +54,10 @@ The server speaks MCP over stdio. Configure your MCP client to launch it with:
 | Tool | Purpose |
 |---|---|
 | `generate_delegate_key` | Create delegate key, fund from sponsor, provision smart wallet |
-| `redeem_invitation` | Poll for and redeem `portfolioMandate` invitation after user grant |
+| `propose_create` | Build one UI link for portfolio creation and delegation |
+| `redeem_invitation` | Redeem `portfolioMandate` and derive its portfolio binding |
+| `propose_edit` | Build a pre-populated owner-approved portfolio edit link |
 | `submit_target_allocation` | Submit a `setTargetAllocation` transaction via the delegation key |
-| `rotate_token` | Invalidate bearer token and issue a new one |
 
 ## Resources
 
@@ -69,9 +71,9 @@ The server speaks MCP over stdio. Configure your MCP client to launch it with:
 ## Architecture
 
 - **Read side**: YDS (YMax Data Service) — portfolio state, APYs, flow status
-- **Write side**: This MCP server — signing-key operations only
+- **Action side**: This MCP server — proposal links and signing-key operations
 - **Mnemonic isolation**: Key material is generated inside the server and never exposed to the client
-- **Bearer token auth**: Opaque session token returned by `generate_delegate_key`
+- **Single-user state**: Delegate key material and portfolio binding remain inside the server
 
 See [mcp-design.md](./mcp-design.md) for the full design rationale.
 
