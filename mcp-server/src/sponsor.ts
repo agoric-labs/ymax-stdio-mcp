@@ -4,16 +4,21 @@ import { stringToPath } from '@cosmjs/crypto';
 import { coins } from '@cosmjs/amino';
 
 const HD_PATH = "m/44'/564'/0'/0/0";
-const RPC = process.env.RPC_URL || 'https://main.rpc.agoric.net:443';
-const SPONSOR_AMOUNT = process.env.SPONSOR_AMOUNT || '20000000'; // 20 BLD
+export interface SponsorConfig {
+  rpcUrl: string;
+  amount: string;
+  mnemonic?: string;
+  privateKey?: string;
+}
 
 const fail = (msg: string): never => {
   throw new Error(msg);
 };
 
-function makeSponsorWallet(): Promise<DirectSecp256k1HdWallet> {
-  const mnemonic = process.env.SPONSOR_MNEMONIC;
-  const privateKey = process.env.SPONSOR_PRIVATE_KEY;
+function makeSponsorWallet(
+  config: SponsorConfig,
+): Promise<DirectSecp256k1HdWallet> {
+  const { mnemonic, privateKey } = config;
 
   if (mnemonic && privateKey) {
     fail('set only one of SPONSOR_MNEMONIC or SPONSOR_PRIVATE_KEY');
@@ -34,19 +39,23 @@ function makeSponsorWallet(): Promise<DirectSecp256k1HdWallet> {
   return fail('set SPONSOR_MNEMONIC or SPONSOR_PRIVATE_KEY');
 }
 
-export async function getSponsorAddress(): Promise<string> {
-  const wallet = await makeSponsorWallet();
+export async function getSponsorAddress(config: SponsorConfig): Promise<string> {
+  const wallet = await makeSponsorWallet(config);
   const [{ address }] = await wallet.getAccounts();
   return address;
 }
 
 export async function fundDelegate(
   delegateAddress: string,
+  config: SponsorConfig,
 ): Promise<{ txHash: string; amount: string }> {
-  const wallet = await makeSponsorWallet();
+  const wallet = await makeSponsorWallet(config);
   const [{ address: sponsorAddress }] = await wallet.getAccounts();
 
-  const client = await SigningStargateClient.connectWithSigner(RPC, wallet);
+  const client = await SigningStargateClient.connectWithSigner(
+    config.rpcUrl,
+    wallet,
+  );
 
   const fee: StdFee = {
     amount: coins(5000, 'ubld'),
@@ -56,7 +65,7 @@ export async function fundDelegate(
   const result = await client.sendTokens(
     sponsorAddress,
     delegateAddress,
-    coins(Number(SPONSOR_AMOUNT), 'ubld'),
+    coins(Number(config.amount), 'ubld'),
     fee,
     'sponsor funding for delegate',
   );
@@ -65,5 +74,5 @@ export async function fundDelegate(
     throw new Error(`Sponsor transfer failed: ${result.rawLog}`);
   }
 
-  return { txHash: result.transactionHash, amount: SPONSOR_AMOUNT };
+  return { txHash: result.transactionHash, amount: config.amount };
 }

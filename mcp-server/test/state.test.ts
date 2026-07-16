@@ -3,11 +3,9 @@ import assert from 'node:assert/strict';
 import { unlinkSync } from 'node:fs';
 
 const testStateFile = `/tmp/ymax-mcp-state-test-${process.pid}.json`;
-process.env.YMAX_STATE_FILE = testStateFile;
-
-const { getSession, setSession, updateSession } = await import(
-  '../src/state.ts'
-);
+const { makeSessionStore } = await import('../src/state.ts');
+const { getSession, setSession, updateSession } =
+  makeSessionStore(testStateFile);
 
 after(() => {
   try {

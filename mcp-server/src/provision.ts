@@ -3,7 +3,9 @@ import { stringToPath } from '@cosmjs/crypto';
 import { DirectSecp256k1HdWallet, Registry } from '@cosmjs/proto-signing';
 import { SigningStargateClient } from '@cosmjs/stargate';
 
-const RPC = process.env.RPC_URL || 'https://main.rpc.agoric.net:443';
+export interface ProvisionConfig {
+  rpcUrl: string;
+}
 
 const MSG_PROVISION_TYPE_URL = '/agoric.swingset.MsgProvision';
 const HD_PATH = "m/44'/564'/0'/0/0";
@@ -69,6 +71,7 @@ const MsgProvision = {
 export async function provisionWallet(
   mnemonic: string,
   address: string,
+  config: ProvisionConfig,
 ): Promise<{ txHash: string }> {
   const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic, {
     prefix: 'agoric',
@@ -83,9 +86,11 @@ export async function provisionWallet(
   const registry = new Registry();
   registry.register(MSG_PROVISION_TYPE_URL, MsgProvision as any);
 
-  const client = await SigningStargateClient.connectWithSigner(RPC, wallet, {
-    registry,
-  });
+  const client = await SigningStargateClient.connectWithSigner(
+    config.rpcUrl,
+    wallet,
+    { registry },
+  );
 
   const addressBytes = Uint8Array.from(fromBech32(address).data);
 

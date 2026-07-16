@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// Load .env file before any other imports that read process.env
+// Load local configuration before constructing injected I/O below.
 const envPath = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -47,7 +47,26 @@ import {
 } from './handlers/propose.ts';
 import { handleRedeem } from './handlers/redeem.ts';
 import { handleSubmitAllocation } from './handlers/submit-allocation.ts';
+import { DEFAULT_STATE_FILE, makeSessionStore } from './state.ts';
 import type { ToolResponse } from './types.ts';
+
+const RPC_URL = process.env.RPC_URL || 'https://main.rpc.agoric.net:443';
+const YMAX_UI_URL =
+  process.env.YMAX_UI_URL ||
+  'https://staging-agentic-ui.ymax0-ui.pages.dev';
+const sessionStore = makeSessionStore(
+  process.env.YMAX_STATE_FILE || DEFAULT_STATE_FILE,
+);
+const agoricIO = {
+  fetch: globalThis.fetch.bind(globalThis),
+  agoricNet: process.env.AGORIC_NET || 'main',
+};
+const registrationIO = {
+  fetch: agoricIO.fetch,
+  ydsUrl: process.env.YDS_URL || 'https://main0.ymax.app',
+  chainId: process.env.CHAIN_ID || 'agoric-3',
+  ymaxInstance: process.env.YMAX_INSTANCE || 'ymax0',
+};
 
 const SOLVER_CONSTRAINTS = {
   uri: 'solver-constraints',
@@ -330,7 +349,15 @@ server.setRequestHandler(
     try {
       switch (name) {
         case 'generate_delegate_key': {
-          const result = await handleGenerateKey();
+          const result = await handleGenerateKey(sessionStore, {
+            sponsor: {
+              rpcUrl: RPC_URL,
+              amount: process.env.SPONSOR_AMOUNT || '20000000',
+              mnemonic: process.env.SPONSOR_MNEMONIC,
+              privateKey: process.env.SPONSOR_PRIVATE_KEY,
+            },
+            provision: { rpcUrl: RPC_URL },
+          });
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return {
             content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -338,7 +365,7 @@ server.setRequestHandler(
         }
 
         case 'redeem_invitation': {
-          const res = await handleRedeem();
+          const res = await handleRedeem({ ...agoricIO, state: sessionStore });
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }
@@ -347,7 +374,11 @@ server.setRequestHandler(
           const { allocations } = args as {
             allocations: Record<string, number | string>;
           };
-          const res = await handleProposeCreate(allocations);
+          const res = await handleProposeCreate(
+            allocations,
+            sessionStore,
+            YMAX_UI_URL,
+          );
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }
@@ -356,13 +387,17 @@ server.setRequestHandler(
           const { allocations } = args as {
             allocations: Record<string, number | string>;
           };
-          const res = await handleProposeEdit(allocations);
+          const res = await handleProposeEdit(
+            allocations,
+            sessionStore,
+            YMAX_UI_URL,
+          );
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }
 
         case 'propose_grant': {
-          const res = await handleProposeGrant();
+          const res = await handleProposeGrant(sessionStore, YMAX_UI_URL);
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }
@@ -372,10 +407,9 @@ server.setRequestHandler(
             allocations: Record<string, number>;
           };
           const res = await handleSubmitAllocation(allocations, {
-            fetch: globalThis.fetch,
-            ydsUrl: process.env.YDS_URL || 'https://main0.ymax.app',
-            chainId: process.env.CHAIN_ID || 'agoric-3',
-            ymaxInstance: process.env.YMAX_INSTANCE || 'ymax0',
+            ...agoricIO,
+            state: sessionStore,
+            registration: registrationIO,
           });
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;

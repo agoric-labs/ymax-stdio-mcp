@@ -27,6 +27,7 @@ cp .env.example .env
 |---|---|---|
 | `SPONSOR_MNEMONIC` or `SPONSOR_PRIVATE_KEY` | Yes | Seed for the BLD wallet that funds new delegates |
 | `RPC_URL` | No | Agoric RPC endpoint (defaults to mainnet) |
+| `AGORIC_NET` | No | Agoric network used for vstorage and wallet actions (default `main`) |
 | `SPONSOR_AMOUNT` | No | BLD to send per delegate (default `20000000` = 20 BLD) |
 | `YMAX_UI_URL` | No | YMax UI for proposal links (defaults to the agentic UI preview) |
 | `YDS_URL` | No | YDS endpoint used to register submitted transactions |

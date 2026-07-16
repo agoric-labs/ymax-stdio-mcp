@@ -8,9 +8,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { SessionState } from './types.ts';
 
-const FILE =
-  process.env.YMAX_STATE_FILE ||
-  resolve(dirname(fileURLToPath(import.meta.url)), '..', 'state.json');
+export const DEFAULT_STATE_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'state.json',
+);
 
 interface PersistedData {
   session?: SessionState;
@@ -20,10 +22,10 @@ interface PriorPersistedData extends PersistedData {
   sessions?: Record<string, SessionState>;
 }
 
-function load(): PersistedData {
-  if (!existsSync(FILE)) return {};
+function load(file: string): PersistedData {
+  if (!existsSync(file)) return {};
   try {
-    const parsed = JSON.parse(readFileSync(FILE, 'utf8')) as PriorPersistedData;
+    const parsed = JSON.parse(readFileSync(file, 'utf8')) as PriorPersistedData;
     if (parsed.session) return { session: parsed.session };
 
     // Preserve a sole delegate created by earlier single-user server versions.
@@ -34,29 +36,37 @@ function load(): PersistedData {
   }
 }
 
-function save(data: PersistedData): void {
-  const tmp = `${FILE}.tmp`;
+function save(file: string, data: PersistedData): void {
+  const tmp = `${file}.tmp`;
   writeFileSync(tmp, JSON.stringify(data, null, 2), {
     encoding: 'utf8',
     mode: 0o600,
   });
-  renameSync(tmp, FILE);
+  renameSync(tmp, file);
 }
 
-const data = load();
-
-export function setSession(mnemonic: string, address: string): void {
-  data.session = { mnemonic, address };
-  save(data);
+export interface SessionStore {
+  setSession: (mnemonic: string, address: string) => void;
+  getSession: () => SessionState | undefined;
+  updateSession: (updates: Partial<SessionState>) => boolean;
 }
 
-export function getSession(): SessionState | undefined {
-  return data.session;
-}
+export function makeSessionStore(file: string): SessionStore {
+  const data = load(file);
 
-export function updateSession(updates: Partial<SessionState>): boolean {
-  if (!data.session) return false;
-  Object.assign(data.session, updates);
-  save(data);
-  return true;
+  return {
+    setSession(mnemonic: string, address: string): void {
+      data.session = { mnemonic, address };
+      save(file, data);
+    },
+    getSession(): SessionState | undefined {
+      return data.session;
+    },
+    updateSession(updates: Partial<SessionState>): boolean {
+      if (!data.session) return false;
+      Object.assign(data.session, updates);
+      save(file, data);
+      return true;
+    },
+  };
 }

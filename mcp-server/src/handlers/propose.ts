@@ -3,17 +3,15 @@ import {
   buildEditProposalUrl,
   buildGrantProposalUrl,
 } from '../proposals.ts';
-import { getSession } from '../state.ts';
+import type { SessionStore } from '../state.ts';
 import type { ProposalParams, ToolResponse } from '../types.ts';
-
-const getYmaxUiUrl = (): string =>
-  process.env.YMAX_UI_URL ||
-  'https://staging-agentic-ui.ymax0-ui.pages.dev';
 
 export async function handleProposeCreate(
   allocations: ProposalParams,
+  state: Pick<SessionStore, 'getSession'>,
+  ymaxUiUrl: string,
 ): Promise<ToolResponse> {
-  const session = getSession();
+  const session = state.getSession();
   if (!session) {
     return {
       content: [
@@ -32,7 +30,7 @@ export async function handleProposeCreate(
         text: JSON.stringify({
           action: 'create_and_delegate',
           url: buildCreateProposalUrl(
-            getYmaxUiUrl(),
+            ymaxUiUrl,
             allocations,
             session.address,
           ),
@@ -43,8 +41,11 @@ export async function handleProposeCreate(
   };
 }
 
-export async function handleProposeGrant(): Promise<ToolResponse> {
-  const session = getSession();
+export async function handleProposeGrant(
+  state: Pick<SessionStore, 'getSession'>,
+  ymaxUiUrl: string,
+): Promise<ToolResponse> {
+  const session = state.getSession();
   if (!session) {
     return {
       content: [
@@ -62,7 +63,7 @@ export async function handleProposeGrant(): Promise<ToolResponse> {
         type: 'text',
         text: JSON.stringify({
           action: 'delegate_existing_portfolio',
-          url: buildGrantProposalUrl(getYmaxUiUrl(), session.address),
+          url: buildGrantProposalUrl(ymaxUiUrl, session.address),
           permissions: { allocation: true },
         }),
       },
@@ -72,8 +73,10 @@ export async function handleProposeGrant(): Promise<ToolResponse> {
 
 export async function handleProposeEdit(
   allocations: ProposalParams,
+  state: Pick<SessionStore, 'getSession'>,
+  ymaxUiUrl: string,
 ): Promise<ToolResponse> {
-  const session = getSession();
+  const session = state.getSession();
   if (!session?.portfolioId) {
     return {
       content: [
@@ -91,7 +94,7 @@ export async function handleProposeEdit(
         type: 'text',
         text: JSON.stringify({
           action: 'owner_approval_required',
-          url: buildEditProposalUrl(getYmaxUiUrl(), allocations),
+          url: buildEditProposalUrl(ymaxUiUrl, allocations),
           portfolioId: session.portfolioId,
         }),
       },

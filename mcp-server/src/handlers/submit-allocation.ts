@@ -5,7 +5,7 @@ import {
   reflectWalletStore,
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
-import { getSession } from '../state.ts';
+import type { SessionStore } from '../state.ts';
 import {
   registerTransaction,
   type TransactionRegistrationIO,
@@ -22,9 +22,14 @@ const makeFee = (gas: number = 2_500_000) => ({
 
 export async function handleSubmitAllocation(
   allocations: AllocationMap,
-  registrationIO: TransactionRegistrationIO,
+  io: {
+    fetch: typeof globalThis.fetch;
+    agoricNet: string;
+    state: Pick<SessionStore, 'getSession'>;
+    registration: TransactionRegistrationIO;
+  },
 ): Promise<ToolResponse> {
-  const session = getSession();
+  const session = io.state.getSession();
   if (!session) {
     return {
       content: [
@@ -46,9 +51,14 @@ export async function handleSubmitAllocation(
     };
   }
 
-  const fetch = globalThis.fetch.bind(globalThis);
-  const networkConfig = await fetchEnvNetworkConfig({ env: process.env, fetch });
-  const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
+  const networkConfig = await fetchEnvNetworkConfig({
+    env: { AGORIC_NET: io.agoricNet },
+    fetch: io.fetch,
+  });
+  const walletKit = await makeSmartWalletKit(
+    { fetch: io.fetch, delay },
+    networkConfig,
+  );
 
   const ssk = await makeSigningSmartWalletKit(
     {
@@ -115,7 +125,7 @@ export async function handleSubmitAllocation(
     : undefined;
   await registerTransaction({
     txHash: result.tx.transactionHash,
-  }, registrationIO).catch((err: Error) =>
+  }, io.registration).catch((err: Error) =>
     console.error('tx registration failed (non-fatal):', err.message),
   );
 

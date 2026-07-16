@@ -7,7 +7,7 @@ import {
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
 import { getPortfolioMandateDetails } from '../invitation.ts';
-import { getSession, updateSession } from '../state.ts';
+import type { SessionStore } from '../state.ts';
 import type { ToolResponse } from '../types.ts';
 
 const delay = (ms: number): Promise<void> =>
@@ -18,8 +18,14 @@ const makeFee = (gas: number = 2_500_000) => ({
   amount: [{ denom: 'ubld', amount: `${Math.round(gas * 0.03)}` }],
 });
 
-export async function handleRedeem(): Promise<ToolResponse> {
-  const session = getSession();
+export interface RedeemIO {
+  fetch: typeof globalThis.fetch;
+  agoricNet: string;
+  state: Pick<SessionStore, 'getSession' | 'updateSession'>;
+}
+
+export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
+  const session = io.state.getSession();
   if (!session) {
     return {
       content: [
@@ -31,9 +37,14 @@ export async function handleRedeem(): Promise<ToolResponse> {
     };
   }
 
-  const fetch = globalThis.fetch.bind(globalThis);
-  const networkConfig = await fetchEnvNetworkConfig({ env: process.env, fetch });
-  const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
+  const networkConfig = await fetchEnvNetworkConfig({
+    env: { AGORIC_NET: io.agoricNet },
+    fetch: io.fetch,
+  });
+  const walletKit = await makeSmartWalletKit(
+    { fetch: io.fetch, delay },
+    networkConfig,
+  );
 
   const ymaxInstance = walletKit.agoricNames.instance['ymax0'];
   if (!ymaxInstance) {
@@ -103,7 +114,7 @@ export async function handleRedeem(): Promise<ToolResponse> {
     { overwrite: true },
   );
 
-  updateSession({
+  io.state.updateSession({
     portfolioId,
     delegationKeyName,
   });
