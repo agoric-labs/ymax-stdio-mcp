@@ -15,6 +15,8 @@ const fail = (msg: string): never => {
   throw new Error(msg);
 };
 
+export const makeFundingCoins = (amount: string) => coins(amount, 'ubld');
+
 function makeSponsorWallet(
   config: SponsorConfig,
 ): Promise<DirectSecp256k1HdWallet> {
@@ -65,7 +67,7 @@ export async function fundDelegate(
   const result = await client.sendTokens(
     sponsorAddress,
     delegateAddress,
-    coins(Number(config.amount), 'ubld'),
+    makeFundingCoins(config.amount),
     fee,
     'sponsor funding for delegate',
   );
