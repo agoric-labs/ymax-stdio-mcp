@@ -6,6 +6,7 @@ import {
   retryUntilCondition,
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
+import { getPortfolioMandateDetails } from '../invitation.ts';
 import { getSession, updateSession } from '../state.ts';
 import type { ToolResponse } from '../types.ts';
 
@@ -17,14 +18,16 @@ const makeFee = (gas: number = 2_500_000) => ({
   amount: [{ denom: 'ubld', amount: `${Math.round(gas * 0.03)}` }],
 });
 
-export async function handleRedeem(
-  bearerToken: string,
-  portfolioId: number,
-): Promise<ToolResponse> {
-  const session = getSession(bearerToken);
+export async function handleRedeem(): Promise<ToolResponse> {
+  const session = getSession();
   if (!session) {
     return {
-      content: [{ type: 'text', text: 'unauthorized' }],
+      content: [
+        {
+          type: 'text',
+          text: 'no delegate state — call generate_delegate_key first',
+        },
+      ],
     };
   }
 
@@ -74,6 +77,9 @@ export async function handleRedeem(
     };
   }
 
+  const { portfolioId, agentId, permissions } =
+    getPortfolioMandateDetails(invitation);
+
   // Create signing wallet kit
   const ssk = await makeSigningSmartWalletKit(
     {
@@ -97,7 +103,7 @@ export async function handleRedeem(
     { overwrite: true },
   );
 
-  updateSession(bearerToken, {
+  updateSession({
     portfolioId,
     delegationKeyName,
   });
@@ -111,6 +117,8 @@ export async function handleRedeem(
           delegationKey: delegationKeyName,
           redeemTx: result.tx.transactionHash,
           portfolioId,
+          agentId,
+          permissions,
         }),
       },
     ],

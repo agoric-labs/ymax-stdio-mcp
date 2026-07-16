@@ -2,7 +2,7 @@
 
 ## YDS: The Read Side
 
-YDS (YMax Data Service) is the read-only API for portfolio state, instruments, and flow data. All data queries go to YDS — the MCP server handles only signed operations.
+YDS (YMax Data Service) is the read-only API for portfolio state, instruments, and flow data. All data queries go to YDS; the MCP server handles signed operations and builds owner-approval links.
 
 - **Base URL**: `https://main0.ymax.app`
 - **Discover endpoints**: `GET /openapi.json` (OpenAPI 3.0 spec)
@@ -16,12 +16,13 @@ Your delegated authority is **allocation** (currently the only mandate type; oth
 
 - Create or close the portfolio (owner-only)
 - Deposit or withdraw funds
-- Add or remove instrument keys from the portfolio's current set
+- Directly add or remove instrument keys from the portfolio's current set
 - Perform any action outside `setTargetAllocation`
 
 ## Guardrails
 
 - Preserve the existing instrument key set exactly. Adding or removing keys causes the on-chain contract to reject with `"unauthorized allocations for [...]"`.
+- To change the key set, call `propose_edit`. Once the owner approves an edit, the resulting portfolio instruments are the effective mandate for subsequent delegated allocations.
 - Do not attempt to deposit, withdraw, or create positions after delegation. The contract rejects these with the current allocation mandate.
 - Each portfolio has its own delegation. A saved delegation key for one portfolio cannot be used for another.
 

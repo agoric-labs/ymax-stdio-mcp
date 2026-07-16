@@ -1,85 +1,52 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  createSession,
-  getSession,
-  rotateToken,
-  updateSession,
-} from '../src/state.ts';
+import { unlinkSync } from 'node:fs';
 
-test('createSession returns a token string', () => {
-  const token = createSession('test mnemonic', 'agoric1abc');
-  assert.strictEqual(typeof token, 'string');
-  assert.ok(token.length > 0);
+const testStateFile = `/tmp/ymax-mcp-state-test-${process.pid}.json`;
+process.env.YMAX_STATE_FILE = testStateFile;
+
+const { getSession, setSession, updateSession } = await import(
+  '../src/state.ts'
+);
+
+after(() => {
+  try {
+    unlinkSync(testStateFile);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 });
 
-test('getSession returns session for valid token', () => {
-  const token = createSession('test mnemonic', 'agoric1abc');
-  const session = getSession(token);
-  assert.ok(session);
-  assert.strictEqual(session.mnemonic, 'test mnemonic');
-  assert.strictEqual(session.address, 'agoric1abc');
-  assert.strictEqual(session.portfolioId, undefined);
-  assert.strictEqual(session.delegationKeyName, undefined);
+test('setSession stores the server delegate state', () => {
+  setSession('test mnemonic', 'agoric1abc');
+
+  assert.deepStrictEqual(getSession(), {
+    mnemonic: 'test mnemonic',
+    address: 'agoric1abc',
+  });
 });
 
-test('getSession returns undefined for invalid token', () => {
-  const session = getSession('nonexistent-token');
-  assert.strictEqual(session, undefined);
+test('setSession replaces prior delegate state', () => {
+  setSession('mnemonic-1', 'addr-1');
+  setSession('mnemonic-2', 'addr-2');
+
+  assert.deepStrictEqual(getSession(), {
+    mnemonic: 'mnemonic-2',
+    address: 'addr-2',
+  });
 });
 
-test('rotateToken returns a new token', () => {
-  const oldToken = createSession('test mnemonic', 'agoric1abc');
-  const newToken = rotateToken(oldToken);
-  assert.ok(newToken);
-  assert.strictEqual(typeof newToken, 'string');
-  assert.notStrictEqual(newToken, oldToken);
-});
+test('updateSession adds portfolio binding', () => {
+  setSession('mnemonic', 'addr');
+  updateSession({
+    portfolioId: 84,
+    delegationKeyName: 'delegate-portfolio84',
+  });
 
-test('rotateToken invalidates old token', () => {
-  const oldToken = createSession('test mnemonic', 'agoric1abc');
-  const newToken = rotateToken(oldToken);
-  assert.ok(newToken);
-
-  const oldSession = getSession(oldToken);
-  assert.strictEqual(oldSession, undefined);
-
-  const newSession = getSession(newToken);
-  assert.ok(newSession);
-  assert.strictEqual(newSession.mnemonic, 'test mnemonic');
-});
-
-test('rotateToken preserves session state', () => {
-  const token = createSession('mnemonic-1', 'addr-1');
-  updateSession(token, { portfolioId: 84, delegationKeyName: 'delegate-portfolio84' });
-
-  const newToken = rotateToken(token);
-  assert.ok(newToken);
-
-  const session = getSession(newToken);
-  assert.ok(session);
-  assert.strictEqual(session.mnemonic, 'mnemonic-1');
-  assert.strictEqual(session.address, 'addr-1');
-  assert.strictEqual(session.portfolioId, 84);
-  assert.strictEqual(session.delegationKeyName, 'delegate-portfolio84');
-});
-
-test('rotateToken returns undefined for invalid token', () => {
-  const result = rotateToken('nonexistent-token');
-  assert.strictEqual(result, undefined);
-});
-
-test('updateSession updates session fields', () => {
-  const token = createSession('mnemonic', 'addr');
-  const updated = updateSession(token, { portfolioId: 84 });
-  assert.strictEqual(updated, true);
-
-  const session = getSession(token);
-  assert.ok(session);
-  assert.strictEqual(session.portfolioId, 84);
-});
-
-test('updateSession returns false for invalid token', () => {
-  const result = updateSession('nonexistent-token', { portfolioId: 84 });
-  assert.strictEqual(result, false);
+  assert.deepStrictEqual(getSession(), {
+    mnemonic: 'mnemonic',
+    address: 'addr',
+    portfolioId: 84,
+    delegationKeyName: 'delegate-portfolio84',
+  });
 });

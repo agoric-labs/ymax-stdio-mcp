@@ -18,12 +18,18 @@ const makeFee = (gas: number = 2_500_000) => ({
 });
 
 export async function handleSubmitAllocation(
-  bearerToken: string,
   allocations: AllocationMap,
 ): Promise<ToolResponse> {
-  const session = getSession(bearerToken);
+  const session = getSession();
   if (!session) {
-    return { content: [{ type: 'text', text: 'unauthorized' }] };
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'no delegate state — call generate_delegate_key first',
+        },
+      ],
+    };
   }
   if (!session.portfolioId || !session.delegationKeyName) {
     return {

@@ -1,84 +1,61 @@
 # YMax Agent Onboarding
 
-YDS (YMax Data Service) is the read API for portfolio and instrument data. Base URL: `https://main0.ymax.app`. Discover endpoints via `GET /openapi.json`. The MCP server handles only signed operations — all data queries go to YDS.
+YDS is the read API for portfolio and instrument data. Base URL: `https://main0.ymax.app`. The MCP server keeps signing material and signed operations local.
 
 ## Role Boundaries
 
-- You call `generate_delegate_key` — the MCP server creates the key, funds the address, and provisions the smart wallet. Never ask the user to generate a key or provision a wallet.
-- You propose the allocation. The user approves by creating the portfolio with your pre-filled link.
-- You never create the portfolio yourself — only the user can do that on `main0.ymax.app`.
-- You propose the delegate grant. The user approves by completing the Grant flow in the YMax UI. You do not have access to the Grant UI.
-- Never ask the user for their mnemonic or private key.
-- **Never display the bearer token** in any response to the user. The token is for machine-to-machine auth only — treat it like a password. Never log it, echo it, or include it in summaries.
+- Call `generate_delegate_key`; the server creates, funds, and provisions the delegate wallet.
+- Never ask the user for a mnemonic or private key.
+- Propose allocations through UI links. The user approves portfolio creation, funding, delegation, and owner edits in YMax.
+- Use `submit_target_allocation` only after the delegation invitation has been redeemed.
 
 ## Delegation Model
 
-- A Grant alone does not make the delegate operational. The `portfolioMandate` invitation must be redeemed.
-- Delegation is portfolio-specific. Each portfolio requires its own Grant and redemption.
-- The on-chain capability links a specific delegate address to a specific portfolio.
-- Redeeming saves a wallet-store key as `delegate-portfolio{NN}`. The MCP server tracks this for you.
+- Provisioning must happen before delegation.
+- `propose_create` combines allocation prefill and the delegate address so creation and delegation take one trip through the UI.
+- The delivered `portfolioMandate` invitation contains `portfolioId`, `agentId`, and `permissions`; `redeem_invitation` derives the binding from those details.
+- Delegated allocation authority applies to the portfolio's current instrument key set. When the owner includes instruments in an approved edit, they become part of the effective mandate.
+- Redeeming saves the capability as `delegate-portfolio{NN}`.
 
 ## Run Order
 
-1. **Research & propose allocation** — Query YDS instruments, research protocols, discuss risk profile with user, then propose an initial allocation.
-2. **Create delegate wallet** — Call `generate_delegate_key`. This generates the key, funds the address from the sponsor, and provisions the smart wallet in one step.
-3. **Propose via create-portfolio link** — Construct the URL with your proposed allocation as query params.
-   Currently operational (branch preview):
-   ```
-   https://feat-ago-611-prepopulated-li.ymax0-ui.pages.dev/create-portfolio?{InstrumentKey}={Pct}&...
-   ```
-   Example: `https://feat-ago-611-prepopulated-li.ymax0-ui.pages.dev/create-portfolio?Aave_Arbitrum=60&Compound_Arbitrum=40`
-   Planned (once available, use this instead):
-   ```
-   https://main0.ymax.app/create-portfolio?{InstrumentKey}={Pct}&...
-   ```
-   The user sees the allocation pre-populated and creates the portfolio to approve it.
-4. **User shares the portfolio ID** — The YMax Activity tab shows something like "Activity ID 84-1" — the portfolio is `portfolio84`. Ask the user to share the portfolio number.
-5. **Propose delegation via Grant link** — First confirm the smart wallet was provisioned. Then construct the URL with the delegate address.
-   Currently operational (branch preview):
-   ```
-   https://feat-ago-611-prepopulated-li.ymax0-ui.pages.dev/grant?accountHolder={delegateAddress}
-   ```
-   Example: `https://feat-ago-611-prepopulated-li.ymax0-ui.pages.dev/grant?accountHolder=agoric1rfdl83r4rmnly6jwa9mywuaj9kqc6wcw3h9wva`
-   Planned (once available, use this instead):
-   ```
-   https://main0.ymax.app/grant?accountHolder={delegateAddress}
-   ```
-   The user follows the link and completes the Grant flow to approve the delegation.
-6. **Redeem invitation** — Call `redeem_invitation` with the portfolio ID. The server polls for the `portfolioMandate` invitation, redeems it, and returns the agent ID and permissions.
-7. **Verify** — Check the `redeem_invitation` response includes `"permissions": { "allocation": true }` and an `agentId`. This confirms the delegate is operational.
+1. Query YDS, discuss risk, and propose an initial allocation.
+2. Call `generate_delegate_key`.
+3. Call `propose_create` with the proposed allocation map.
+4. Give the returned link to the user. They create, fund, and delegate in one UI flow.
+5. Call `redeem_invitation`; do not ask the user for a portfolio number.
+6. Verify that the response contains the expected portfolio, agent, and `{ "allocation": true }` permission.
+7. Use `submit_target_allocation` for autonomous changes.
+8. Use `propose_edit` when the user should approve an allocation or instrument-set change.
 
-## Conventions
+Proposal tools intentionally forward allocation keys and numeric values without enforcing instrument membership, totals, or ranges. This lets agents exercise and observe UI boundary handling. The UI remains responsible for interpreting the proposal before the user approves it.
 
-| Thing | Pattern | Example |
-|---|---|---|
-| Portfolio name | `portfolio{NN}` | `portfolio84` |
-| Wallet-store key | `delegate-portfolio{NN}` | `delegate-portfolio84` |
-| Activity ID mapping | `{NN}-1` → `portfolio{NN}` | `84-1` → `portfolio84` |
-| Grant URL (preview) | `feat-ago-611-prepopulated-li.ymax0-ui.pages.dev/grant?accountHolder={A}` | `grant?accountHolder=agoric1...` |
-| Create-portfolio URL (preview) | `feat-ago-611-prepopulated-li.ymax0-ui.pages.dev/create-portfolio?{K1}={P1}&{K2}={P2}` | `create-portfolio?Aave_Arbitrum=60&Compound_Arbitrum=40` |
-| Planned production URLs | Replace `feat-ago-611-prepopulated-li.ymax0-ui.pages.dev` with `main0.ymax.app` | |
-| Chain | `agoric-3` | |
-| Network | `mainnet` (Agoric) | |
-| Contract | `ymax0` | |
-| YDS base | `https://main0.ymax.app` | |
+## URL Shape
+
+Combined creation:
+
+```text
+{YMAX_UI_URL}/create-portfolio?{InstrumentKey}={Value}&...&accountHolder={delegateAddress}&permissions=change-allocations
+```
+
+Owner-approved edit:
+
+```text
+{YMAX_UI_URL}/edit-portfolio?{InstrumentKey}={Value}&...
+```
+
+The default UI is the `Agoric/ymax-web#840` branch preview. Configure `YMAX_UI_URL` when targeting another deployment.
 
 ## Failure Triage
 
-| Symptom | Likely Cause | Remediation |
+| Symptom | Likely cause | Remediation |
 |---|---|---|
-| Invitation not arriving after Grant | Grant may have been completed before provisioning, creating revoked `agent1` | Ask user to retry the Grant flow. The new invitation will appear as `agent2`. |
-| Redemption fails | Mnemonic isn't the one that was funded/provisioned | The MCP server manages the mnemonic — regenerate and re-provision if this happens. |
-| Wallet not funded | Sponsor balance insufficient or RPC unreachable | Fund the sponsor wallet or check `RPC_URL`. |
-| `agent1` is revoked | Grant happened before smart wallet provisioning | This is expected if the first Grant preceded keygen. Retry Grant — the UI creates a new `agent2` entry. |
+| No delegate state | Key generation has not completed | Call `generate_delegate_key` |
+| Invitation not arriving | UI flow is incomplete or ran before provisioning | Complete or retry the combined UI flow |
+| Invalid invitation details | The delivered invitation is not the expected contract version | Inspect its `customDetails` and deployment versions |
+| Wallet not funded | Sponsor balance is insufficient or RPC is unavailable | Fund the sponsor or check `RPC_URL` |
+| Delegated allocation rejects an instrument set | Proposal keys differ from the portfolio's current keys | Re-read the portfolio or ask the owner to approve an edit |
 
 ## Completion Report
 
-When onboarding finishes, summarize:
-
-- Chosen instruments and their allocations
-- Portfolio ID (e.g., `portfolio84`)
-- Delegate address (e.g., `agoric1...`)
-- Delegation key saved (e.g., `delegate-portfolio84`)
-- Agent ID and permissions (e.g., `agent2`, `{ allocation: true }`)
-- Status (active/operational)
+Report the chosen allocation, portfolio ID, delegate address, saved delegation key, agent ID, permissions, and operational status.

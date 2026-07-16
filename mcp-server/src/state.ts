@@ -1,77 +1,62 @@
-import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
+import {
+  existsSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { SessionState } from './types.ts';
 
-const FILE = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  'state.json',
-);
+const FILE =
+  process.env.YMAX_STATE_FILE ||
+  resolve(dirname(fileURLToPath(import.meta.url)), '..', 'state.json');
 
 interface PersistedData {
-  sessions: Record<string, SessionState>;
-  tokenToSession: Record<string, string>;
+  session?: SessionState;
+}
+
+interface PriorPersistedData extends PersistedData {
+  sessions?: Record<string, SessionState>;
 }
 
 function load(): PersistedData {
-  if (!existsSync(FILE)) return { sessions: {}, tokenToSession: {} };
+  if (!existsSync(FILE)) return {};
   try {
-    return JSON.parse(readFileSync(FILE, 'utf8'));
+    const parsed = JSON.parse(readFileSync(FILE, 'utf8')) as PriorPersistedData;
+    if (parsed.session) return { session: parsed.session };
+
+    // Preserve a sole delegate created by earlier single-user server versions.
+    const priorSessions = Object.values(parsed.sessions ?? {});
+    return priorSessions.length === 1 ? { session: priorSessions[0] } : {};
   } catch {
-    return { sessions: {}, tokenToSession: {} };
+    return {};
   }
 }
 
 function save(data: PersistedData): void {
-  const tmp = FILE + '.tmp';
-  writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+  const tmp = `${FILE}.tmp`;
+  writeFileSync(tmp, JSON.stringify(data, null, 2), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
   renameSync(tmp, FILE);
 }
 
-const data: PersistedData = load();
+const data = load();
 
-const sessions = new Map(Object.entries(data.sessions));
-const tokenToSession = new Map(Object.entries(data.tokenToSession));
-
-function persist(): void {
-  data.sessions = Object.fromEntries(sessions);
-  data.tokenToSession = Object.fromEntries(tokenToSession);
+export function setSession(mnemonic: string, address: string): void {
+  data.session = { mnemonic, address };
   save(data);
 }
 
-export function createSession(mnemonic: string, address: string): string {
-  const sessionId = crypto.randomUUID();
-  sessions.set(sessionId, { mnemonic, address });
-  const token = crypto.randomUUID();
-  tokenToSession.set(token, sessionId);
-  persist();
-  return token;
+export function getSession(): SessionState | undefined {
+  return data.session;
 }
 
-export function getSession(token: string): SessionState | undefined {
-  const sessionId = tokenToSession.get(token);
-  if (!sessionId) return undefined;
-  return sessions.get(sessionId);
-}
-
-export function rotateToken(oldToken: string): string | undefined {
-  const sessionId = tokenToSession.get(oldToken);
-  if (!sessionId) return undefined;
-  tokenToSession.delete(oldToken);
-  const newToken = crypto.randomUUID();
-  tokenToSession.set(newToken, sessionId);
-  persist();
-  return newToken;
-}
-
-export function updateSession(
-  token: string,
-  updates: Partial<SessionState>,
-): boolean {
-  const session = getSession(token);
-  if (!session) return false;
-  Object.assign(session, updates);
-  persist();
+export function updateSession(updates: Partial<SessionState>): boolean {
+  if (!data.session) return false;
+  Object.assign(data.session, updates);
+  save(data);
   return true;
 }

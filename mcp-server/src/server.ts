@@ -40,9 +40,12 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { handleGenerateKey } from './handlers/generate-key.ts';
+import {
+  handleProposeCreate,
+  handleProposeEdit,
+} from './handlers/propose.ts';
 import { handleRedeem } from './handlers/redeem.ts';
 import { handleSubmitAllocation } from './handlers/submit-allocation.ts';
-import { handleRotateToken } from './handlers/rotate-token.ts';
 import type { ToolResponse } from './types.ts';
 
 const SOLVER_CONSTRAINTS = {
@@ -113,11 +116,12 @@ const PROVISIONING_RUNBOOK = {
   mimeType: 'text/plain',
   text: [
     '1. generate_delegate_key — keygen + sponsor fund + smart-wallet provision (single atomic MCP tool)',
-    '2. User completes YMax grant via UI using the returned address',
-    '3. redeem_invitation — poll + redeem + save portfolio state',
-    '4. submit_target_allocation — allocate (repeat as needed)',
+    '2. propose_create — build a combined create-and-delegate UI link',
+    '3. User creates, funds, and delegates in one YMax UI flow',
+    '4. redeem_invitation — derive portfolio binding, redeem, and save state',
+    '5. submit_target_allocation — allocate (repeat as needed)',
     '',
-    'Order matters: provision BEFORE grant. A grant before provisioning produces a revoked agent.',
+    'Order matters: provision BEFORE the combined UI flow. A grant before provisioning produces a revoked agent.',
     '',
     'For complete onboarding instructions, read the ymax-onboarding resource.',
   ].join('\n'),
@@ -167,9 +171,10 @@ const server = new Server(
       resources: {},
     },
     instructions: [
-      'Use generate_delegate_key to create a new delegate wallet (returns address for grant UI + bearer token). Never display the bearer token to the user — it is a machine credential.',
-      'After the user grants via the YMax UI, call redeem_invitation with the portfolio ID.',
+      'Use generate_delegate_key to create and provision a delegate wallet, then propose_create to give the user one UI flow that creates the portfolio and grants allocation authority.',
+      'After the user completes the UI flow, call redeem_invitation. The portfolio ID, agent ID, and permissions come from the delivered invitation.',
       'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set — query via YDS to discover it.',
+      'Use propose_edit when the user should approve a proposed allocation or instrument-set change in the UI.',
       'The solver enforces minimum transfer thresholds — consult solver-constraints resource for limits.',
       'Provision must happen BEFORE grant. See provisioning-runbook and ymax-onboarding resources for the full run order.',
       'Before submitting an allocation, read ymax-allocation-delegate for guardrails, candidate-building heuristics, and escalation rules.',
@@ -182,7 +187,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'generate_delegate_key',
       description:
-        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. Returns the delegate address (for the grant UI) and a bearer token (for subsequent calls only — never display the token to the user). The mnemonic is stored in the MCP server and never returned to the client.',
+        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. The mnemonic is stored in the MCP server and never returned to the client.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -190,22 +195,51 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       },
     },
     {
-      name: 'redeem_invitation',
+      name: 'propose_create',
       description:
-        'Poll for a delivered portfolioMandate invitation (after the user completes the grant via YMax UI) and redeem it. Saves the delegation key in the wallet store as delegate-portfolio{NN} and stores the portfolio ID in server state. Subsequent calls using the same bearer token can reference the portfolio and delegation key automatically.',
+        'Build a YMax UI link that pre-populates portfolio allocations and the provisioned delegate address. The user creates, funds, and grants allocation authority in one UI flow. Allocation keys and values are forwarded without range or instrument validation so callers can exercise UI boundary behavior.',
       inputSchema: {
         type: 'object',
         properties: {
-          bearerToken: {
-            type: 'string',
-            description: 'Bearer token from generate_delegate_key',
-          },
-          portfolioId: {
-            type: 'number',
-            description: 'Portfolio number (e.g. 84)',
+          allocations: {
+            type: 'object',
+            description:
+              'Query parameters to pre-populate as instrument allocations. Values are forwarded unchanged.',
+            additionalProperties: {
+              anyOf: [{ type: 'number' }, { type: 'string' }],
+            },
           },
         },
-        required: ['bearerToken', 'portfolioId'],
+        required: ['allocations'],
+      },
+    },
+    {
+      name: 'redeem_invitation',
+      description:
+        'Poll for a delivered portfolioMandate invitation after the user completes the YMax UI flow. Derives the portfolio ID, agent ID, and permissions from the invitation, then redeems it and saves the delegation key as delegate-portfolio{NN}.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: 'propose_edit',
+      description:
+        'Build a YMax UI link that pre-populates an edit to the current portfolio. Instruments included by the user become part of the portfolio and therefore the effective allocation mandate. Keys and values are forwarded without range or instrument validation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          allocations: {
+            type: 'object',
+            description:
+              'Query parameters to pre-populate as instrument allocations. Values are forwarded unchanged.',
+            additionalProperties: {
+              anyOf: [{ type: 'number' }, { type: 'string' }],
+            },
+          },
+        },
+        required: ['allocations'],
       },
     },
     {
@@ -215,10 +249,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       inputSchema: {
         type: 'object',
         properties: {
-          bearerToken: {
-            type: 'string',
-            description: 'Bearer token from generate_delegate_key',
-          },
           allocations: {
             type: 'object',
             description:
@@ -229,22 +259,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             additionalProperties: { type: 'number' },
           },
         },
-        required: ['bearerToken', 'allocations'],
-      },
-    },
-    {
-      name: 'rotate_token',
-      description:
-        'Invalidate the current bearer token and issue a new one. All server state (mnemonic, portfolio bindings, delegation key references) is preserved under the new token. No on-chain changes.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          bearerToken: {
-            type: 'string',
-            description: 'Current bearer token to rotate',
-          },
-        },
-        required: ['bearerToken'],
+        required: ['allocations'],
       },
     },
   ],
@@ -311,28 +326,34 @@ server.setRequestHandler(
         }
 
         case 'redeem_invitation': {
-          const { bearerToken, portfolioId } = args as {
-            bearerToken: string;
-            portfolioId: number;
+          const res = await handleRedeem();
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return res;
+        }
+
+        case 'propose_create': {
+          const { allocations } = args as {
+            allocations: Record<string, number | string>;
           };
-          const res = await handleRedeem(bearerToken, portfolioId);
+          const res = await handleProposeCreate(allocations);
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return res;
+        }
+
+        case 'propose_edit': {
+          const { allocations } = args as {
+            allocations: Record<string, number | string>;
+          };
+          const res = await handleProposeEdit(allocations);
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }
 
         case 'submit_target_allocation': {
-          const { bearerToken, allocations } = args as {
-            bearerToken: string;
+          const { allocations } = args as {
             allocations: Record<string, number>;
           };
-          const res = await handleSubmitAllocation(bearerToken, allocations);
-          log(`tool ok: ${name} (${Date.now() - started}ms)`);
-          return res;
-        }
-
-        case 'rotate_token': {
-          const { bearerToken } = args as { bearerToken: string };
-          const res = await handleRotateToken(bearerToken);
+          const res = await handleSubmitAllocation(allocations);
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }
