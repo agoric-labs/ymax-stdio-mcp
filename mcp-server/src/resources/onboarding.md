@@ -50,7 +50,7 @@ Owner-approved edit:
 Existing-portfolio grant:
 
 ```text
-{YMAX_UI_URL}/grant?accountHolder={delegateAddress}&permissions=change-allocations
+{YMAX_UI_URL}/grant?accountHolder={delegateAddress}
 ```
 
 The default UI is the `Agoric/ymax-web#840` branch preview. Configure `YMAX_UI_URL` when targeting another deployment.

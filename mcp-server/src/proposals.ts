@@ -36,6 +36,5 @@ export function buildGrantProposalUrl(
 ): string {
   const url = new URL('/grant', uiUrl);
   url.searchParams.set('accountHolder', accountHolder);
-  url.searchParams.set('permissions', 'change-allocations');
   return url.toString();
 }

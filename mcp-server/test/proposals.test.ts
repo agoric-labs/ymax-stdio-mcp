@@ -34,7 +34,7 @@ test('grant proposal delegates an existing portfolio', () => {
 
   assert.strictEqual(url.pathname, '/grant');
   assert.strictEqual(url.searchParams.get('accountHolder'), 'agoric1delegate');
-  assert.strictEqual(url.searchParams.get('permissions'), 'change-allocations');
+  assert.strictEqual(url.searchParams.has('permissions'), false);
 });
 
 test('proposal links preserve experimental values without validation', () => {
