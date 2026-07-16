@@ -56,6 +56,7 @@ The server speaks MCP over stdio. Configure your MCP client to launch it with:
 | `generate_delegate_key` | Create delegate key, fund from sponsor, provision smart wallet |
 | `propose_create` | Build one UI link for portfolio creation and delegation |
 | `redeem_invitation` | Redeem `portfolioMandate` and derive its portfolio binding |
+| `propose_grant` | Build a delegation link for an existing portfolio |
 | `propose_edit` | Build a pre-populated owner-approved portfolio edit link |
 | `submit_target_allocation` | Submit a `setTargetAllocation` transaction via the delegation key |
 

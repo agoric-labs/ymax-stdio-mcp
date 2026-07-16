@@ -1,4 +1,8 @@
-import { buildCreateProposalUrl, buildEditProposalUrl } from '../proposals.ts';
+import {
+  buildCreateProposalUrl,
+  buildEditProposalUrl,
+  buildGrantProposalUrl,
+} from '../proposals.ts';
 import { getSession } from '../state.ts';
 import type { ProposalParams, ToolResponse } from '../types.ts';
 
@@ -32,6 +36,33 @@ export async function handleProposeCreate(
             allocations,
             session.address,
           ),
+          permissions: { allocation: true },
+        }),
+      },
+    ],
+  };
+}
+
+export async function handleProposeGrant(): Promise<ToolResponse> {
+  const session = getSession();
+  if (!session) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'no delegate state — call generate_delegate_key first',
+        },
+      ],
+    };
+  }
+
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          action: 'delegate_existing_portfolio',
+          url: buildGrantProposalUrl(getYmaxUiUrl(), session.address),
           permissions: { allocation: true },
         }),
       },

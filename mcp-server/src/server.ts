@@ -43,6 +43,7 @@ import { handleGenerateKey } from './handlers/generate-key.ts';
 import {
   handleProposeCreate,
   handleProposeEdit,
+  handleProposeGrant,
 } from './handlers/propose.ts';
 import { handleRedeem } from './handlers/redeem.ts';
 import { handleSubmitAllocation } from './handlers/submit-allocation.ts';
@@ -175,6 +176,7 @@ const server = new Server(
       'After the user completes the UI flow, call redeem_invitation. The portfolio ID, agent ID, and permissions come from the delivered invitation.',
       'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set — query via YDS to discover it.',
       'Use propose_edit when the user should approve a proposed allocation or instrument-set change in the UI.',
+      'Use propose_grant when delegating allocation authority over an existing portfolio.',
       'The solver enforces minimum transfer thresholds — consult solver-constraints resource for limits.',
       'Provision must happen BEFORE grant. See provisioning-runbook and ymax-onboarding resources for the full run order.',
       'Before submitting an allocation, read ymax-allocation-delegate for guardrails, candidate-building heuristics, and escalation rules.',
@@ -217,6 +219,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
       name: 'redeem_invitation',
       description:
         'Poll for a delivered portfolioMandate invitation after the user completes the YMax UI flow. Derives the portfolio ID, agent ID, and permissions from the invitation, then redeems it and saves the delegation key as delegate-portfolio{NN}.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        required: [],
+      },
+    },
+    {
+      name: 'propose_grant',
+      description:
+        'Build a YMax UI link that grants the provisioned delegate allocation authority over an existing portfolio. The user selects or confirms the portfolio in the UI; redeem_invitation derives the portfolio binding from the delivered invitation.',
       inputSchema: {
         type: 'object',
         properties: {},
@@ -345,6 +357,12 @@ server.setRequestHandler(
             allocations: Record<string, number | string>;
           };
           const res = await handleProposeEdit(allocations);
+          log(`tool ok: ${name} (${Date.now() - started}ms)`);
+          return res;
+        }
+
+        case 'propose_grant': {
+          const res = await handleProposeGrant();
           log(`tool ok: ${name} (${Date.now() - started}ms)`);
           return res;
         }

@@ -13,6 +13,7 @@ YDS is the read API for portfolio and instrument data. Base URL: `https://main0.
 
 - Provisioning must happen before delegation.
 - `propose_create` combines allocation prefill and the delegate address so creation and delegation take one trip through the UI.
+- `propose_grant` preserves the standalone path for delegating an existing portfolio.
 - The delivered `portfolioMandate` invitation contains `portfolioId`, `agentId`, and `permissions`; `redeem_invitation` derives the binding from those details.
 - Delegated allocation authority applies to the portfolio's current instrument key set. When the owner includes instruments in an approved edit, they become part of the effective mandate.
 - Redeeming saves the capability as `delegate-portfolio{NN}`.
@@ -28,6 +29,8 @@ YDS is the read API for portfolio and instrument data. Base URL: `https://main0.
 7. Use `submit_target_allocation` for autonomous changes.
 8. Use `propose_edit` when the user should approve an allocation or instrument-set change.
 
+For an existing portfolio, replace steps 3–4 with `propose_grant` and have the user complete the returned Grant link. Then continue with `redeem_invitation`; its invitation details identify the portfolio.
+
 Proposal tools intentionally forward allocation keys and numeric values without enforcing instrument membership, totals, or ranges. This lets agents exercise and observe UI boundary handling. The UI remains responsible for interpreting the proposal before the user approves it.
 
 ## URL Shape
@@ -42,6 +45,12 @@ Owner-approved edit:
 
 ```text
 {YMAX_UI_URL}/edit-portfolio?{InstrumentKey}={Value}&...
+```
+
+Existing-portfolio grant:
+
+```text
+{YMAX_UI_URL}/grant?accountHolder={delegateAddress}&permissions=change-allocations
 ```
 
 The default UI is the `Agoric/ymax-web#840` branch preview. Configure `YMAX_UI_URL` when targeting another deployment.

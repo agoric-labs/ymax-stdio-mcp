@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildCreateProposalUrl,
   buildEditProposalUrl,
+  buildGrantProposalUrl,
 } from '../src/proposals.ts';
 
 const UI_URL = 'https://staging-agentic-ui.ymax0-ui.pages.dev';
@@ -22,6 +23,16 @@ test('create proposal combines allocations and delegation', () => {
   assert.strictEqual(url.pathname, '/create-portfolio');
   assert.strictEqual(url.searchParams.get('Aave_Arbitrum'), '60');
   assert.strictEqual(url.searchParams.get('Compound_Arbitrum'), '40');
+  assert.strictEqual(url.searchParams.get('accountHolder'), 'agoric1delegate');
+  assert.strictEqual(url.searchParams.get('permissions'), 'change-allocations');
+});
+
+test('grant proposal delegates an existing portfolio', () => {
+  const url = new URL(
+    buildGrantProposalUrl(UI_URL, 'agoric1delegate'),
+  );
+
+  assert.strictEqual(url.pathname, '/grant');
   assert.strictEqual(url.searchParams.get('accountHolder'), 'agoric1delegate');
   assert.strictEqual(url.searchParams.get('permissions'), 'change-allocations');
 });

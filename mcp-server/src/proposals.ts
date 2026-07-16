@@ -29,3 +29,13 @@ export function buildEditProposalUrl(
   appendAllocations(url, allocations);
   return url.toString();
 }
+
+export function buildGrantProposalUrl(
+  uiUrl: string,
+  accountHolder: string,
+): string {
+  const url = new URL('/grant', uiUrl);
+  url.searchParams.set('accountHolder', accountHolder);
+  url.searchParams.set('permissions', 'change-allocations');
+  return url.toString();
+}

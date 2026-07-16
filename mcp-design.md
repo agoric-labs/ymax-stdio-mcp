@@ -106,13 +106,19 @@ No arguments
 
 ---
 
-### 4. `propose_edit`
+### 4. `propose_grant`
+
+Builds a standalone `/grant` link for an existing portfolio. The UI delivers a mandate invitation to the provisioned delegate, and redemption derives the selected portfolio from that invitation.
+
+---
+
+### 5. `propose_edit`
 
 Builds an `/edit-portfolio` link for owner approval. Instruments the owner includes in the resulting portfolio become part of its effective mandate. Like `propose_create`, it forwards allocation keys and values without policy validation.
 
 ---
 
-### 5. `submit_target_allocation`
+### 6. `submit_target_allocation`
 
 Submits a `setTargetAllocation` transaction signed by the stored delegation key. Automatically registers the transaction hash via `POST /transactions` to bridge the activity-page visibility gap. Uses the portfolio ID and delegation key name saved during `redeem_invitation`.
 
@@ -201,7 +207,7 @@ mcp-server/
     server.ts            # MCP entrypoint: tool registration, request dispatch
     handlers/
       generate-key.ts    # generate_delegate_key — tool def, input schema, impl
-      propose.ts         # propose_create and propose_edit UI links
+      propose.ts         # create, grant, and edit proposal UI links
       redeem.ts          # redeem_invitation — tool def, input schema, impl
       submit-allocation.ts  # submit_target_allocation — tool def, input schema, impl
     proposals.ts         # Pure proposal URL builders
