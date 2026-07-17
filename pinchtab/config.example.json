@@ -1,0 +1,53 @@
+{
+  "$schema": "https://raw.githubusercontent.com/pinchtab/pinchtab/main/schema/config.json",
+  "server": {
+    "bind": "127.0.0.1",
+    "token": "SET_LOCALLY_DO_NOT_COMMIT"
+  },
+  "browser": {
+    "extensionPaths": [
+      "/absolute/path/to/unpacked/wallet-extension"
+    ]
+  },
+  "instanceDefaults": {
+    "mode": "headed",
+    "dialogAutoAccept": false,
+    "tabPolicy": {
+      "lifecycle": "keep",
+      "restore": false
+    }
+  },
+  "security": {
+    "allowEvaluate": false,
+    "allowMacro": false,
+    "allowScreencast": true,
+    "allowDownload": false,
+    "allowCookies": false,
+    "allowUpload": false,
+    "allowFileScheme": false,
+    "allowedDomains": [
+      "main0.ymax.app"
+    ],
+    "attach": {
+      "enabled": false,
+      "allowHosts": [
+        "127.0.0.1",
+        "localhost",
+        "::1"
+      ],
+      "allowSchemes": [
+        "ws",
+        "wss",
+        "http",
+        "https"
+      ],
+      "forwardProxyAuth": false
+    },
+    "idpi": {
+      "enabled": true,
+      "strictMode": true,
+      "scanContent": true,
+      "wrapContent": true
+    }
+  }
+}
