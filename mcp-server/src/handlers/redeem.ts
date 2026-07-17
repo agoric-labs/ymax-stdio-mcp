@@ -6,7 +6,10 @@ import {
   retryUntilCondition,
 } from '@agoric/client-utils';
 import { SigningStargateClient } from '@cosmjs/stargate';
-import { getPortfolioMandateDetails } from '../invitation.ts';
+import {
+  findPortfolioMandateInvitation,
+  getPortfolioMandateDetails,
+} from '../invitation.ts';
 import type { SessionStore } from '../state.ts';
 import { toolError } from '../responses.ts';
 import type { ToolResponse } from '../types.ts';
@@ -49,12 +52,10 @@ export async function handleRedeem(io: RedeemIO): Promise<ToolResponse> {
   try {
     invitation = await retryUntilCondition(
       async () => {
-        const state = await walletKit.storedWalletState(session.address);
-        return [...state.invitationsReceived.values()].find(
-          candidate =>
-            candidate.description === 'portfolioMandate' &&
-            JSON.stringify(candidate.instance) === JSON.stringify(ymaxInstance),
+        const currentWalletRecord = await walletKit.getCurrentWalletRecord(
+          session.address,
         );
+        return findPortfolioMandateInvitation(currentWalletRecord);
       },
       candidate => candidate !== undefined,
       'portfolioMandate invitation',
