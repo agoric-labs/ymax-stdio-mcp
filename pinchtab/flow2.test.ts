@@ -14,7 +14,7 @@ const response = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
-test("Claude SDK gets every tool and resource from only the local MCP server", async () => {
+test("Claude SDK gets its normal tools plus the local MCP server", async () => {
   let call: any;
   const output = await runClaudeAgent("A DeFi user request", {
     cwd: "/repo",
@@ -46,15 +46,14 @@ test("Claude SDK gets every tool and resource from only the local MCP server", a
   assert.strictEqual(call.options.cwd, "/repo");
   assert.strictEqual(call.options.strictMcpConfig, true);
   assert.strictEqual(call.options.persistSession, true);
-  assert.deepStrictEqual(call.options.tools, [
-    "ListMcpResources",
-    "ReadMcpResource",
-  ]);
+  assert.deepStrictEqual(call.options.tools, {
+    type: "preset",
+    preset: "claude_code",
+  });
   assert.deepStrictEqual(call.options.allowedTools, [
-    "ListMcpResources",
-    "ReadMcpResource",
     "mcp__ymax-yield-agent__*",
   ]);
+  assert.strictEqual(call.options.permissionMode, "auto");
   assert.strictEqual(
     call.options.mcpServers["ymax-yield-agent"].command,
     "./mcp-server/node_modules/.bin/tsx",

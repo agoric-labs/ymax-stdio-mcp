@@ -54,8 +54,8 @@ Common types include `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, and `bu
 - **Inferred Capability Surface** — prefer inferred local types and derive
   public factory interfaces with `ReturnType`/`Awaited` rather than duplicating
   object shapes. See `pinchtab/pinchtab-api.ts:184`.
-- **Local-MCP Full Surface** — expose all tools from the explicitly configured
-  stdio MCP server, with unrelated built-ins excluded. See
+- **Normal Agent Surface + Local MCP** — keep Claude Code's normal tools and
+  add all tools from the explicitly configured stdio MCP server. See
   `pinchtab/local-agent.ts:40`.
 - **Expected-Artifact Validation** — the MCP produces proposal URLs; drivers
   find and validate the expected origin and shape rather than recomputing them.

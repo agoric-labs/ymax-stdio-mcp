@@ -37,16 +37,12 @@ export const runClaudeAgentTurn = async (
       env,
       mcpServers: { "ymax-yield-agent": MCP_SERVER },
       strictMcpConfig: true,
-      // Pattern: Local-MCP Full Surface. Expose every tool and resource from
-      // the one explicitly configured stdio server. The two built-ins only
-      // list and read resources from that configured MCP server.
-      tools: ["ListMcpResources", "ReadMcpResource"],
-      allowedTools: [
-        "ListMcpResources",
-        "ReadMcpResource",
-        "mcp__ymax-yield-agent__*",
-      ],
-      permissionMode: "dontAsk",
+      // Keep Claude Code's normal tools and add the explicitly configured
+      // YMax MCP server. Auto mode lets this unattended flow use ordinary
+      // tools without parking on an interactive permission prompt.
+      tools: { type: "preset", preset: "claude_code" },
+      allowedTools: ["mcp__ymax-yield-agent__*"],
+      permissionMode: "auto",
       persistSession: true,
       ...(resume ? { resume } : {}),
     },
