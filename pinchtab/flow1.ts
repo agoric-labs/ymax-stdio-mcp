@@ -1,23 +1,35 @@
 #!/usr/bin/env -S node --import ts-blank-space/register
-/** @file Flow 1: create, fund, and delegate a new portfolio. */
+/** @file Flow 1: operator-driven YMax session with browser recording. */
 /* global globalThis */
+import { spawn as spawnChild } from "node:child_process";
 import { pathToFileURL } from "node:url";
-import { query as queryClaude } from "@anthropic-ai/claude-agent-sdk";
 import {
   getPinchtabConfig,
   makePinchTabEndpoint,
   type PinchTabInstance,
 } from "./pinchtab-api.ts";
-import { driveOwnerFlow } from "./flow1-browser.ts";
 import {
-  checkSponsorFailure,
-  runClaudeAgentTurn,
-  type AgentQuery,
-} from "./local-agent.ts";
-import { hasErrorCode, makeFileRW } from "./pola-io.ts";
+  hasErrorCode,
+  joinTailUnder,
+  makeFileRW,
+  type ReadableFile,
+} from "./pola-io.ts";
 
-// Pattern: Explicit Real-Funds Knob. A run cannot spend an implicit/default
-// amount.
+const MCP_CONFIG = {
+  mcpServers: {
+    "ymax-yield-agent": {
+      type: "stdio",
+      command: "./mcp-server/node_modules/.bin/tsx",
+      args: ["mcp-server/src/server.ts"],
+    },
+  },
+};
+
+type InteractiveClaude = (
+  prompt: string,
+  options: { cwd: string; env: NodeJS.ProcessEnv },
+) => Promise<void>;
+
 const getDepositAmount = (env: NodeJS.ProcessEnv) => {
   const text = env.YMAX_FLOW1_DEPOSIT_USDC;
   const amount = Number(text);
@@ -40,7 +52,7 @@ const getMaxInstruments = (env: NodeJS.ProcessEnv) => {
   return count;
 };
 
-const makeInitialPrompt = (amount: number, maxInstruments: number) =>
+export const makeInitialPrompt = (amount: number, maxInstruments: number) =>
   [
     `I want to create a new YMax portfolio with ${amount} USDC.`,
     "I prefer a diversified, yield-seeking allocation, while avoiding needless concentration.",
@@ -50,96 +62,100 @@ const makeInitialPrompt = (amount: number, maxInstruments: number) =>
     "I'll handle any wallet approvals.",
   ].join(" ");
 
-const REDEEM_PROMPT = [
-  "I've approved the portfolio setup in YMax.",
-  "Please finish setting up your access, then report the portfolio, agent, and permissions you received.",
-  "Don't make any allocation changes yet.",
-].join(" ");
+export const makeInteractiveClaudeArgs = (prompt: string) => [
+  "--mcp-config",
+  JSON.stringify(MCP_CONFIG),
+  "--strict-mcp-config",
+  "--name",
+  "ymax-flow1",
+  prompt,
+];
 
-// Pattern: Expected-Artifact Validation. The MCP computes the URL; the driver
-// only finds it and verifies the expected origin, shape, and bounded proposal.
-export const findExpectedCreateUrl = (
-  text: string,
-  expectedUiUrl: string,
-  maxInstruments = Number.POSITIVE_INFINITY,
+const launchInteractiveClaude = (
+  prompt: string,
+  {
+    cwd,
+    env,
+    command = "claude",
+    spawn = spawnChild,
+  }: {
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    command?: string;
+    spawn?: typeof spawnChild;
+  },
+) =>
+  new Promise<void>((resolve, reject) => {
+    const child = spawn(command, makeInteractiveClaudeArgs(prompt), {
+      cwd,
+      env,
+      stdio: "inherit",
+    });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          Error(
+            `Interactive Claude exited ${signal ? `on ${signal}` : `with status ${code}`}.`,
+          ),
+        );
+      }
+    });
+  });
+
+const assertRecording = async (file: ReadableFile) => {
+  const stats = await file.stat();
+  if (!stats.isFile() || Number(stats.size) <= 0) {
+    throw Error(`PinchTab did not write a non-empty recording: ${file}`);
+  }
+};
+
+const stopAndFindRecording = async (
+  recorder: PinchTabInstance["recorder"],
+  recordings: ReadableFile,
+  delay: (milliseconds: number) => Promise<unknown>,
 ) => {
-  const candidates = text.match(/https:\/\/[^\s<>"')\]*`]+/g) || [];
-  const expectedOrigin = new URL(expectedUiUrl).origin;
-  for (const candidate of candidates) {
-    const url = new URL(candidate.replace(/[.,;]+$/, ""));
-    const allocationEntries = [...url.searchParams.entries()].filter(
-      ([name]) => !["accountHolder", "permissions"].includes(name),
-    );
-    const allocationValues = allocationEntries.map(([, value]) =>
-      Number(value),
-    );
-    const allocationTotal = allocationValues.reduce(
-      (total, value) => total + value,
-      0,
-    );
-    if (
-      url.origin === expectedOrigin &&
-      url.pathname === "/create-portfolio" &&
-      url.searchParams.get("accountHolder")?.startsWith("agoric1") &&
-      url.searchParams.get("permissions") === "change-allocations" &&
-      url.searchParams.getAll("accountHolder").length === 1 &&
-      url.searchParams.getAll("permissions").length === 1 &&
-      allocationValues.length > 0 &&
-      allocationValues.length <= maxInstruments &&
-      allocationEntries.every(([name]) => name.endsWith("_Base")) &&
-      allocationValues.every((value) => Number.isFinite(value) && value >= 0) &&
-      Math.abs(allocationTotal - 100) < 0.000_001
-    ) {
-      return url.toString();
+  await recorder.stop();
+  let lastStatus;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    lastStatus = await recorder.status();
+    if (lastStatus.error) {
+      throw Error(`PinchTab recording failed:\n${lastStatus.error}`);
     }
+    const path = lastStatus.outputPath || lastStatus.path;
+    if (lastStatus.state === "finished" && typeof path === "string") {
+      const file = joinTailUnder({ toString: () => path }, recordings);
+      await assertRecording(file);
+      return file;
+    }
+    await delay(1000);
   }
   throw Error(
-    `The local agent did not return a valid create-and-delegate proposal from ${expectedOrigin}.`,
+    `PinchTab did not finish writing the Flow 1 recording within 30 seconds. Last status:\n${JSON.stringify(lastStatus, null, 2)}`,
   );
 };
 
-export const validateRedemption = (text: string) => {
-  const checks = [
-    /"status"\s*:\s*"redeemed"/,
-    /"portfolioId"\s*:\s*\d+/,
-    /"agentId"\s*:\s*"[^"]+"/,
-    /"permissions"\s*:\s*\{[^{}]*"allocation"\s*:\s*true[^{}]*\}/,
-  ];
-  if (!checks.every((pattern) => pattern.test(text))) {
-    throw Error(
-      "The local agent did not report a valid redeemed delegation with portfolio, agent, and allocation authority.",
-    );
-  }
-};
-
-// Pattern: Composition-Root Defaults. Only main connects ambient powers;
-// helpers receive explicit capabilities and remain cheap to test.
 export const main = async (
   env = process.env,
   {
     fetch = globalThis.fetch,
     fspP = import("node:fs/promises"),
     pathP = import("node:path"),
-    query = queryClaude,
     cwd = process.cwd(),
-    ownerFlow = driveOwnerFlow,
     delay = (milliseconds: number) =>
-      new Promise<void>((resolve) => setTimeout(resolve, milliseconds)),
+      new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
+    interactiveClaude,
+    log = console.log,
   }: {
     fetch?: typeof globalThis.fetch;
     fspP?: Promise<typeof import("node:fs/promises")>;
     pathP?: Promise<typeof import("node:path")>;
-    query?: AgentQuery;
     cwd?: string;
-    ownerFlow?: (
-      instance: PinchTabInstance,
-      options: {
-        amount: number;
-        uiUrl: string;
-        delay: (milliseconds: number) => Promise<void>;
-      },
-    ) => Promise<unknown>;
-    delay?: (milliseconds: number) => Promise<void>;
+    delay?: (milliseconds: number) => Promise<unknown>;
+    interactiveClaude?: InteractiveClaude;
+    log?: (message: string) => void;
   } = {},
 ) => {
   const amount = getDepositAmount(env);
@@ -156,7 +172,7 @@ export const main = async (
     .stat()
     .then(
       () => true,
-      (error) => {
+      error => {
         if (hasErrorCode(error, "ENOENT")) return false;
         throw error;
       },
@@ -166,6 +182,7 @@ export const main = async (
       `Flow 1 requires a blank MCP state. Remove ${statePath} before rerunning Flow 1.`,
     );
   }
+
   const config = await getPinchtabConfig(env, files.readOnly());
   const pinchtab = makePinchTabEndpoint(
     fetch,
@@ -173,64 +190,56 @@ export const main = async (
     config.token,
     files,
   );
-
-  console.info(
-    "Flow 1: asking the local Claude agent to prepare a new portfolio. This may take a few minutes...",
-  );
-  const prepared = await runClaudeAgentTurn(
-    makeInitialPrompt(amount, maxInstruments),
-    {
-      query,
-      cwd,
-      env,
-      label: "Flow 1",
-    },
-  );
-  checkSponsorFailure(prepared.output);
-  if (!prepared.sessionId) {
-    throw Error("The local agent did not return a resumable session ID.");
-  }
-
   const uiUrl =
     env.YMAX_UI_URL || "https://staging-agentic-ui.ymax0-ui.pages.dev";
-  const createUrl = findExpectedCreateUrl(
-    prepared.output,
-    uiUrl,
-    maxInstruments,
-  );
 
-  console.info("Flow 1: checking the local PinchTab server...");
+  log("Flow 1: checking the local PinchTab server...");
   await pinchtab.health();
-  console.info(`Flow 1: finding PinchTab profile ${config.profileName}...`);
   const profile = await pinchtab.provideProfile(config.profileName);
-  console.info(
-    `Flow 1: starting or reusing PinchTab profile ${config.profileName}...`,
-  );
-  const instance = await profile.provideInstance([new URL(uiUrl).hostname]);
-  console.info("Flow 1: opening the combined portfolio proposal...");
-  await instance.navigate(createUrl);
-  console.info(
-    `Flow 1: creating the portfolio with ${amount} USDC using at most ${maxInstruments} instruments...`,
-  );
-  await ownerFlow(instance, { amount, uiUrl, delay });
+  log(`Flow 1: opening headed PinchTab profile ${config.profileName}...`);
+  const instance = await profile.provideFreshInstance([
+    new URL(uiUrl).hostname,
+  ]);
+  const recordings = profile.getRecordingsDir().readOnly();
 
-  console.info(
-    "Flow 1: wallet flow completed; asking the same local agent to redeem and verify its invitation...",
+  log("Flow 1: starting browser recording...");
+  await instance.recorder.startGif();
+
+  const prompt = makeInitialPrompt(amount, maxInstruments);
+  log(`\nFlow 1 initial prompt:\n\n${prompt}\n`);
+  log(
+    "Claude is interactive. Use the headed browser for wallet actions. When you are done, type /exit in Claude to stop the recording.",
   );
-  const redeemed = await runClaudeAgentTurn(REDEEM_PROMPT, {
-    query,
-    cwd,
-    env,
-    label: "Flow 1",
-    resume: prepared.sessionId,
-  });
-  validateRedemption(redeemed.output);
-  console.info("Flow 1: delegation redeemed and verified.");
-  return { createUrl, sessionId: prepared.sessionId };
+
+  const runClaude =
+    interactiveClaude ||
+    ((initialPrompt, options) =>
+      launchInteractiveClaude(initialPrompt, {
+        ...options,
+        command: env.YMAX_CLAUDE_BIN || "claude",
+      }));
+
+  let claudeFailure: unknown;
+  try {
+    await runClaude(prompt, { cwd, env });
+  } catch (error) {
+    claudeFailure = error;
+  }
+
+  log("Flow 1: stopping browser recording...");
+  const recording = await stopAndFindRecording(
+    instance.recorder,
+    recordings,
+    delay,
+  );
+  log(`Flow 1: browser recording saved at ${recording}.`);
+
+  if (claudeFailure) throw claudeFailure;
+  return { recordingPath: recording.toString() };
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
-  main().catch((error) => {
+  main().catch(error => {
     console.error(error);
     process.exit(1);
   });

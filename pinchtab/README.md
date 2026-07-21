@@ -17,17 +17,16 @@ not a per-change regression suite. PinchTab drives a dedicated headed browser;
 a local Claude session uses this repository's stdio MCP server; and MetaMask
 in a dedicated profile remains the owner signer.
 
-Flow 1 drives wallet connection, the configured deposit, and MetaMask
-approvals, then resumes its persisted local-agent session to redeem the
-invitation. The non-signing smoke and Flow 2 script stop before any wallet
-signature.
+Flow 1 records a headed browser while the operator works through an interactive
+Claude Code session and performs wallet actions manually. The non-signing smoke
+and Flow 2 script stop before any wallet signature.
 
 ## Status
 
 | Flow | Script | Current boundary |
 |---|---|---|
 | Browser/recording smoke | [`smoke.ts`](./smoke.ts) | Navigates, snapshots, and records without interaction |
-| 1. Create a new portfolio | [`flow1.ts`](./flow1.ts) | Complete automated creation, funding, delegation, and invitation redemption |
+| 1. Create a new portfolio | [`flow1.ts`](./flow1.ts) | Operator-driven interactive Claude and headed-browser recording |
 | 2. Add agent to existing portfolio | [`flow2.ts`](./flow2.ts) | Local agent creates a `/grant` proposal; browser stops before `Grant delegation` |
 | 3–7 | — | Not implemented |
 
@@ -38,9 +37,9 @@ signature.
   it does not load MetaMask for this harness even when PinchTab passes the
   right flags. The local working binary was
   `/home/connolly/.nix-profile/bin/chromium`.
-- Claude Code authenticated for the local user. Flows 1 and 2 use the Claude
-  Agent SDK and persist native sessions for inspection with tools such as
-  AgentsView.
+- Claude Code authenticated for the local user. Flow 1 launches the interactive
+  CLI; Flow 2 uses the Agent SDK. Both persist native sessions for inspection
+  with tools such as AgentsView.
 - The MCP server dependencies installed in [`../mcp-server`](../mcp-server), a
   built [`../agoric-sdk`](../agoric-sdk) worktree, and the sponsor environment
   needed by `generate_delegate_key`.
@@ -91,11 +90,10 @@ means the wallet did not load.
 Before a real recording, have an operator check all of these conditions:
 
 1. The profile is dedicated to this harness and is not a personal wallet.
-   Its total funds and permissions bound the worst-case economic loss: Flow 1
-   checks the requesting host and approval-button shape, but it does not
-   validate transaction amounts, spenders, contract methods, or gas. Keep only
+   Its total funds and permissions bound the worst-case economic loss. Keep only
    the assets and gas that the operator accepts putting at risk, across every
-   network available to the profile.
+   network available to the profile, and review wallet requests during the
+   interactive run.
 2. The browser is headed and the only permitted navigation domains are YMax
    domains needed by the flow.
 3. The funding EOA mnemonic is supplied only through an ignored local secret
@@ -144,17 +142,24 @@ ffmpeg could not infer a muxer from temporary filenames ending in
 `.mp4.encoding.tmp` or `.webm.encoding.tmp`, so the smoke script avoids those
 direct paths.
 
-## Run automated Flow 1
+## Run interactive Flow 1
 
-Flow 1 asks the local Claude agent for a diversified initial allocation using
-only instruments on Base, then a combined `/create-portfolio` proposal. The
-script validates the proposal's UI origin, Base-only instruments, allocation
-total, delegate address, and allocation permission before opening it in the
-dedicated PinchTab profile.
+Flow 1 starts the dedicated headed PinchTab profile and begins a browser GIF
+recording before launching an interactive Claude Code session. Claude receives
+the initial request automatically, has its normal tools plus the repository's
+YMax MCP server, and remains available for operator follow-up. Use the headed
+browser manually for YMax and MetaMask actions.
 
-Flow 1 targets the branch-preview UI by default. The PinchTab profile must
-allow `staging-agentic-ui.ymax0-ui.pages.dev`; allowing only `main0.ymax.app`
-will block the proposal navigation.
+If the dedicated profile is already running, Flow 1 restarts that browser
+instance before recording so it cannot inherit the stale no-tab state that
+made automated navigation time out. Persistent profile and wallet data remain;
+the browser process and open tabs do not.
+
+When the flow is complete, type `/exit` in Claude. That is the driver's explicit
+stop signal: it stops the PinchTab recording, waits for the file to be written,
+prints its path, and exits. AgentsView retains the Claude session separately.
+If Claude exits with an error, the driver still stops and finalizes the browser
+recording before reporting the error.
 
 Flow 1 also requires a blank MCP state so it provisions a new delegate for the
 new portfolio. If `mcp-server/state.json` exists (or the file selected by
@@ -162,30 +167,21 @@ new portfolio. If `mcp-server/state.json` exists (or the file selected by
 operator which file to remove. Archive it first if its existing delegation may
 be needed later.
 
-The operator's job ends after setting up and funding MetaMask in the dedicated
-profile. Set the intended deposit explicitly; the driver rejects values above
-the 30 USDC recording cap. `YMAX_FLOW1_MAX_INSTRUMENTS` defaults to 3 and
-limits both the agent request and accepted proposal to 1–12 instruments. This
-is useful for keeping very small test deposits above per-position minimums.
-
-The script connects MetaMask when necessary, enters the deposit, creates the
-portfolio, and approves MetaMask requests only when they identify the expected
-YMax host. It allows at most 12 wallet approvals. It then resumes the same
-persisted Claude session, redeems the invitation, and verifies that the result
-identifies a portfolio, agent, and allocation authority.
+Set the intended deposit explicitly; the driver rejects values above the 30
+USDC recording cap. `YMAX_FLOW1_MAX_INSTRUMENTS` defaults to 3 and limits the
+initial request to 1–12 Base instruments. The operator remains responsible for
+checking Claude's proposal, browser state, and wallet approvals.
 
 ```sh
-YMAX_FLOW1_DEPOSIT_USDC=3 \
-YMAX_FLOW1_MAX_INSTRUMENTS=1 \
+YMAX_FLOW1_DEPOSIT_USDC=9 \
+YMAX_FLOW1_MAX_INSTRUMENTS=3 \
 npm run pinchtab:flow1
 ```
 
-Setting `YMAX_FLOW1_DEPOSIT_USDC` and running the script authorizes a real-money
-workflow; there is no later operator checkpoint. The test suite exercises the
-complete YMax and MetaMask orchestration with mocks. The deposit cap is not a
-transaction-semantic check: the operator is responsible for limiting the
-dedicated profile's total funds and permissions to an acceptable loss. Run the
-tests with:
+The browser artifact is a GIF in the profile's PinchTab recordings directory.
+The deposit cap is not a transaction-semantic check: the operator is
+responsible for limiting the dedicated profile's total funds and permissions
+to an acceptable loss. Run the tests with:
 
 ```sh
 npm run pinchtab:test
@@ -227,5 +223,4 @@ described above.
 The next Flow 2 increment is operator-supervised MetaMask handling, invitation
 redemption, and post-run reconciliation. All flows retain the same role
 separation: the browser profile owns the portfolio and the local MCP process
-owns only its delegate key. Automated signing must remain origin-bound and
-explicitly configured with a real-funds amount, as in Flow 1.
+owns only its delegate key.

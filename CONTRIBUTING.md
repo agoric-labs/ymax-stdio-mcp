@@ -56,15 +56,15 @@ Common types include `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, and `bu
   object shapes. See `pinchtab/pinchtab-api.ts:184`.
 - **Normal Agent Surface + Local MCP** — keep Claude Code's normal tools and
   add all tools from the explicitly configured stdio MCP server. See
-  `pinchtab/local-agent.ts:40`.
+  `pinchtab/flow1.ts:65` and `pinchtab/local-agent.ts:40`.
 - **Expected-Artifact Validation** — the MCP produces proposal URLs; drivers
   find and validate the expected origin and shape rather than recomputing them.
-  See `pinchtab/flow1.ts:58`.
+  See `pinchtab/flow2.ts:39`.
 - **Extension Target Bridge** — address MetaMask notification targets through
   Chromium debugging when PinchTab omits them from `/tabs`. See
   `pinchtab/pinchtab-api.ts:82`.
-- **Origin-Bound Wallet Approval** — approve only recognized MetaMask actions
-  that visibly identify the configured YMax host. See
-  `pinchtab/flow1-browser.ts:43`.
+- **Interactive Recording Boundary** — start browser recording before the
+  interactive agent and finalize it after the agent exits. See
+  `pinchtab/flow1.ts:203`.
 - **Explicit Real-Funds Knob** — real-money scripts require an explicit bounded
   amount; never choose a spend amount by default. See `pinchtab/flow1.ts:19`.

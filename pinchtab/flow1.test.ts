@@ -1,13 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  findExpectedCreateUrl,
-  main,
-  validateRedemption,
-} from "./flow1.ts";
+import { makeInteractiveClaudeArgs, main } from "./flow1.ts";
 
 const UI_URL = "https://staging-agentic-ui.ymax0-ui.pages.dev";
-const CREATE_URL = `${UI_URL}/create-portfolio?Compound_Base=100&accountHolder=agoric1delegate&permissions=change-allocations`;
+const RECORDING = "/tmp/profile/.pinchtab-state/recordings/flow1.gif";
 
 const response = (body: unknown, status = 200) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), {
@@ -15,80 +11,78 @@ const response = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
-const missingStateFspP = () =>
+const makeFsp = ({ stateExists = false } = {}) =>
   Promise.resolve({
-    stat: async () => {
-      throw Object.assign(Error("not found"), { code: "ENOENT" });
+    stat: async (path: unknown) => {
+      const name = String(path);
+      if (name.endsWith("mcp-server/state.json")) {
+        if (stateExists) return {} as any;
+        throw Object.assign(Error("not found"), { code: "ENOENT" });
+      }
+      if (name === RECORDING) {
+        return { isFile: () => true, size: 42 } as any;
+      }
+      throw Error(`unexpected stat: ${name}`);
     },
   } as any);
 
-test("create URL must be an allocated create-and-delegate proposal from YMax", () => {
-  assert.strictEqual(
-    findExpectedCreateUrl(`Here is your proposal: ${CREATE_URL}`, UI_URL),
-    CREATE_URL,
-  );
-  assert.throws(
-    () =>
-      findExpectedCreateUrl(
-        "https://attacker.example/create-portfolio?Compound_Base=100&accountHolder=agoric1delegate&permissions=change-allocations",
-        UI_URL,
-      ),
-    /valid create-and-delegate/,
-  );
-  assert.throws(
-    () =>
-      findExpectedCreateUrl(
-        `${UI_URL}/create-portfolio?Compound_Base=50&Aave_Base=50&accountHolder=agoric1delegate&permissions=change-allocations`,
-        UI_URL,
-        1,
-      ),
-    /valid create-and-delegate/,
-  );
-  assert.throws(
-    () =>
-      findExpectedCreateUrl(
-        `${UI_URL}/create-portfolio?accountHolder=agoric1delegate&permissions=change-allocations`,
-        UI_URL,
-      ),
-    /valid create-and-delegate/,
-  );
-  assert.throws(
-    () =>
-      findExpectedCreateUrl(
-        `${UI_URL}/create-portfolio?Aave_Ethereum=100&accountHolder=agoric1delegate&permissions=change-allocations`,
-        UI_URL,
-      ),
-    /valid create-and-delegate/,
-  );
+const makePinchtabFetch = (events: string[], bodies: unknown[]) =>
+  (() => {
+    let startAttempts = 0;
+    return async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (init?.body) bodies.push(JSON.parse(String(init.body)));
+      if (href.endsWith("/health")) return response({});
+      if (href.endsWith("/profiles")) {
+        return response([
+          { id: "prof_1", name: "ymax-flow1", path: "/tmp/profile" },
+        ]);
+      }
+      if (href.endsWith("/profiles/prof_1/start")) {
+        startAttempts += 1;
+        if (startAttempts === 1) return response("already running", 409);
+        return response({ port: 9870 }, 201);
+      }
+      if (href.endsWith("/profiles/prof_1/stop")) {
+        events.push("profile:stop");
+        return response({ status: "stopped" });
+      }
+      if (href.endsWith("/record/start")) {
+        events.push("record:start");
+        return response({});
+      }
+      if (href.endsWith("/record/stop")) {
+        events.push("record:stop");
+        return response({ path: RECORDING });
+      }
+      if (href.endsWith("/record/status")) {
+        return response({ state: "finished", outputPath: RECORDING });
+      }
+      throw Error(`unexpected URL: ${href}`);
+    };
+  })() as typeof globalThis.fetch;
+
+test("interactive Claude keeps normal tools and adds only the YMax MCP config", () => {
+  const prompt = "Create my test portfolio";
+  const args = makeInteractiveClaudeArgs(prompt);
+  const configIndex = args.indexOf("--mcp-config");
+  const config = JSON.parse(args[configIndex + 1]);
+
+  assert.deepStrictEqual(config, {
+    mcpServers: {
+      "ymax-yield-agent": {
+        type: "stdio",
+        command: "./mcp-server/node_modules/.bin/tsx",
+        args: ["mcp-server/src/server.ts"],
+      },
+    },
+  });
+  assert.ok(args.includes("--strict-mcp-config"));
+  assert.ok(!args.includes("--print"));
+  assert.strictEqual(args.at(-1), prompt);
 });
 
-test("create URL may be surrounded by Markdown formatting", () => {
-  assert.strictEqual(
-    findExpectedCreateUrl(`Here's your proposal: **${CREATE_URL}**`, UI_URL),
-    CREATE_URL,
-  );
-  assert.strictEqual(
-    findExpectedCreateUrl(
-      `Here's your proposal: [review it](${CREATE_URL})`,
-      UI_URL,
-    ),
-    CREATE_URL,
-  );
-});
-
-test("redemption must identify the portfolio, agent, and allocation authority", () => {
-  assert.doesNotThrow(() =>
-    validateRedemption(
-      'Done: {"status":"redeemed","portfolioId":84,"agentId":"agent2","permissions":{"allocation":true}}',
-    ),
-  );
-  assert.throws(
-    () => validateRedemption('{"status":"redeemed","portfolioId":84}'),
-    /valid redeemed delegation/,
-  );
-});
-
-test("flow 1 requires an explicit deposit within the 30 USDC cap", async () => {
+test("flow 1 requires an explicit deposit within the recording cap", async () => {
   for (const amount of [undefined, "0", "31", "not-a-number"]) {
     await assert.rejects(
       () =>
@@ -99,12 +93,8 @@ test("flow 1 requires an explicit deposit within the 30 USDC cap", async () => {
           },
           {
             fetch: async () => {
-              throw Error("deposit validation must precede ambient I/O");
+              throw Error("deposit validation must precede PinchTab");
             },
-            query: (() => {
-              throw Error("deposit validation must precede the agent");
-            }) as any,
-            ownerFlow: async () => undefined,
           },
         ),
       /no more than 30/,
@@ -119,17 +109,13 @@ test("flow 1 requires a bounded integer instrument count", async () => {
         main(
           {
             PINCHTAB_TOKEN: "test-token",
-            YMAX_FLOW1_DEPOSIT_USDC: "3",
+            YMAX_FLOW1_DEPOSIT_USDC: "9",
             YMAX_FLOW1_MAX_INSTRUMENTS: count,
           },
           {
             fetch: async () => {
-              throw Error("configuration validation must precede ambient I/O");
+              throw Error("instrument validation must precede PinchTab");
             },
-            query: (() => {
-              throw Error("configuration validation must precede the agent");
-            }) as any,
-            ownerFlow: async () => undefined,
           },
         ),
       /integer from 1 through 12/,
@@ -137,155 +123,114 @@ test("flow 1 requires a bounded integer instrument count", async () => {
   }
 });
 
-test("flow 1 refuses existing MCP state before starting the agent", async () => {
-  let agentCalled = false;
-  await assert.rejects(
-    () =>
-      main(
-        {
-          PINCHTAB_TOKEN: "test-token",
-          YMAX_FLOW1_DEPOSIT_USDC: "3",
-        },
-        {
-          fspP: Promise.resolve({
-            stat: async () => ({}) as any,
-          } as any),
-          query: (() => {
-            agentCalled = true;
-            throw Error("the state preflight must precede the agent");
-          }) as any,
-        },
-      ),
-    /blank MCP state.*Remove .*mcp-server\/state\.json/s,
-  );
-  assert.strictEqual(agentCalled, false);
-});
-
-test("flow 1 automates the wallet flow, then redeems in the same session", async () => {
-  const urls: string[] = [];
+test("flow 1 records around an operator-driven Claude session", async () => {
+  const events: string[] = [];
   const bodies: unknown[] = [];
-  const agentCalls: any[] = [];
-  let ownerFlowCall: any;
-
-  const fetch = async (url: string | URL | Request, init?: RequestInit) => {
-    const href = String(url);
-    urls.push(href);
-    if (init?.body) bodies.push(JSON.parse(String(init.body)));
-    if (href.endsWith("/health")) return response({});
-    if (href.endsWith("/profiles")) {
-      return response([{ id: "prof_1", name: "ymax-flow1", path: "/tmp/p" }]);
-    }
-    if (href.endsWith("/profiles/prof_1/start")) {
-      return response({ port: 9870 }, 201);
-    }
-    if (href.endsWith("/navigate")) return response({ ok: true });
-    throw Error(`unexpected URL: ${href}`);
-  };
-
-  const query = ((input: any) => {
-    agentCalls.push(input);
-    const secondTurn = Boolean(input.options.resume);
-    return (async function* () {
-      yield {
-        type: "result",
-        subtype: "success",
-        session_id: "session-1",
-        result: secondTurn
-          ? '{"status":"redeemed","portfolioId":84,"agentId":"agent2","permissions":{"allocation":true}}'
-          : `Prepared: ${CREATE_URL}`,
-      };
-    })();
-  }) as any;
+  const logs: string[] = [];
+  let receivedPrompt = "";
 
   const result = await main(
     {
       PINCHTAB_TOKEN: "test-token",
       YMAX_UI_URL: UI_URL,
-      YMAX_FLOW1_DEPOSIT_USDC: "3",
-      YMAX_FLOW1_MAX_INSTRUMENTS: "1",
+      YMAX_FLOW1_DEPOSIT_USDC: "9",
+      YMAX_FLOW1_MAX_INSTRUMENTS: "3",
     },
     {
-      fspP: missingStateFspP(),
-      fetch: fetch as typeof globalThis.fetch,
-      query,
-      ownerFlow: async (instance, options) => {
-        ownerFlowCall = { instance, options };
-      },
+      cwd: "/repo",
       delay: async () => undefined,
+      fetch: makePinchtabFetch(events, bodies),
+      fspP: makeFsp(),
+      interactiveClaude: async prompt => {
+        events.push("claude:start");
+        receivedPrompt = prompt;
+        events.push("claude:exit");
+      },
+      log: message => logs.push(message),
     },
   );
 
-  assert.deepStrictEqual(result, {
-    createUrl: CREATE_URL,
-    sessionId: "session-1",
-  });
-  assert.strictEqual(agentCalls.length, 2);
-  assert.match(agentCalls[0].prompt, /3 USDC/);
-  assert.match(agentCalls[0].prompt, /no more than 1 yield opportunities/);
-  assert.match(agentCalls[0].prompt, /only.*Base chain/i);
-  assert.match(agentCalls[0].prompt, /help me create.*manage its allocations/);
-  assert.match(agentCalls[0].prompt, /I'll handle any wallet approvals/);
-  assert.doesNotMatch(
-    agentCalls[0].prompt,
-    /link where|review and approve|portfolio driver|Agent-side transactions|generate_delegate_key|propose_create/,
-  );
-  assert.strictEqual(agentCalls[1].options.resume, "session-1");
-  assert.match(agentCalls[1].prompt, /approved.*finish setting up your access/s);
-  assert.match(agentCalls[1].prompt, /Don't make any allocation changes yet/);
-  assert.doesNotMatch(agentCalls[1].prompt, /redeem|invitation/);
-  assert.strictEqual(ownerFlowCall.options.amount, 3);
-  assert.strictEqual(ownerFlowCall.options.uiUrl, UI_URL);
-  assert.ok(urls.includes("http://127.0.0.1:9870/navigate"));
+  assert.deepStrictEqual(events, [
+    "profile:stop",
+    "record:start",
+    "claude:start",
+    "claude:exit",
+    "record:stop",
+  ]);
+  assert.match(receivedPrompt, /9 USDC/);
+  assert.match(receivedPrompt, /no more than 3 yield opportunities/);
+  assert.match(receivedPrompt, /only.*Base chain/i);
+  assert.match(logs.join("\n"), /\/exit.*stop the recording/s);
+  assert.deepStrictEqual(result, { recordingPath: RECORDING });
   assert.deepStrictEqual(
-    bodies.find((body) => (body as { url?: string }).url),
-    { url: CREATE_URL },
+    bodies.find(body => (body as { format?: string }).format),
+    { format: "gif", fps: 5, quality: 70, scale: 1 },
+  );
+  assert.deepStrictEqual(
+    bodies.find(
+      body => (body as { securityPolicy?: unknown }).securityPolicy,
+    ),
+    {
+      headless: false,
+      securityPolicy: {
+        allowedDomains: ["staging-agentic-ui.ymax0-ui.pages.dev"],
+      },
+    },
   );
 });
 
-test("flow 1 does not redeem if the automated wallet flow fails", async () => {
-  let agentTurns = 0;
+test("flow 1 stops recording if interactive Claude fails", async () => {
+  const events: string[] = [];
+  const bodies: unknown[] = [];
   await assert.rejects(
     () =>
       main(
         {
           PINCHTAB_TOKEN: "test-token",
           YMAX_UI_URL: UI_URL,
-          YMAX_FLOW1_DEPOSIT_USDC: "20",
+          YMAX_FLOW1_DEPOSIT_USDC: "9",
         },
         {
-          fspP: missingStateFspP(),
-          fetch: (async (url: string | URL | Request) => {
-            const href = String(url);
-            if (href.endsWith("/health")) return response({});
-            if (href.endsWith("/profiles")) {
-              return response([
-                { id: "prof_1", name: "ymax-flow1", path: "/tmp/p" },
-              ]);
-            }
-            if (href.endsWith("/profiles/prof_1/start")) {
-              return response({ port: 9870 }, 201);
-            }
-            if (href.endsWith("/navigate")) return response({ ok: true });
-            throw Error(`unexpected URL: ${href}`);
-          }) as typeof globalThis.fetch,
-          query: ((input: any) => {
-            agentTurns += 1;
-            assert.ok(!input.options.resume);
-            return (async function* () {
-              yield {
-                type: "result",
-                subtype: "success",
-                session_id: "session-1",
-                result: CREATE_URL,
-              };
-            })();
-          }) as any,
-          ownerFlow: async () => {
-            throw Error("wallet flow failed");
+          cwd: "/repo",
+          delay: async () => undefined,
+          fetch: makePinchtabFetch(events, bodies),
+          fspP: makeFsp(),
+          interactiveClaude: async () => {
+            events.push("claude:start");
+            throw Error("Claude exited unexpectedly");
+          },
+          log: () => undefined,
+        },
+      ),
+    /Claude exited unexpectedly/,
+  );
+  assert.deepStrictEqual(events, [
+    "profile:stop",
+    "record:start",
+    "claude:start",
+    "record:stop",
+  ]);
+});
+
+test("flow 1 refuses existing MCP state before recording or Claude", async () => {
+  await assert.rejects(
+    () =>
+      main(
+        {
+          PINCHTAB_TOKEN: "test-token",
+          YMAX_FLOW1_DEPOSIT_USDC: "9",
+        },
+        {
+          cwd: "/repo",
+          fetch: async () => {
+            throw Error("state validation must precede PinchTab");
+          },
+          fspP: makeFsp({ stateExists: true }),
+          interactiveClaude: async () => {
+            throw Error("state validation must precede Claude");
           },
         },
       ),
-    /wallet flow failed/,
+    /blank MCP state.*Remove .*mcp-server\/state\.json/s,
   );
-  assert.strictEqual(agentTurns, 1);
 });

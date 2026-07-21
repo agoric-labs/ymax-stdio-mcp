@@ -118,42 +118,68 @@ export const makePinchTabEndpoint = (
     };
   };
 
-  const makeProfile = (profile: JsonRecord) => ({
-    id: profile.id,
-    getFiles() {
-      if (!profile.path) {
-        throw Error(
-          `PinchTab profile ${profile.name || profile.id} did not include a path`,
-        );
-      }
-      return files.join(profile.path);
-    },
-    getRecordingsDir() {
-      return this.getFiles().join(".pinchtab-state", "recordings");
-    },
-    async provideInstance(allowedDomains = ["main0.ymax.app"]) {
-      const start = await status(`/profiles/${profile.id}/start`, {
+  const makeProfile = (profile: JsonRecord) => {
+    const startInstance = (allowedDomains: string[]) =>
+      status(`/profiles/${profile.id}/start`, {
         method: "POST",
         body: JSON.stringify({
           headless: false,
           securityPolicy: { allowedDomains },
         }),
       });
-
+    const requireStarted = async (start: Awaited<ReturnType<typeof status>>) => {
       if ([200, 201, 202].includes(start.status)) {
         return makeInstance(JSON.parse(start.body));
       }
-      if (start.status === 409) {
-        return makeInstance(
-          await json(`/profiles/${profile.id}/instance`, undefined),
-        );
-      }
-
       throw Error(
         `PinchTab profile start failed with HTTP ${start.status}:\n${start.body}`,
       );
-    },
-  });
+    };
+
+    return {
+      id: profile.id,
+      getFiles() {
+        if (!profile.path) {
+          throw Error(
+            `PinchTab profile ${profile.name || profile.id} did not include a path`,
+          );
+        }
+        return files.join(profile.path);
+      },
+      getRecordingsDir() {
+        return this.getFiles().join(".pinchtab-state", "recordings");
+      },
+      async provideInstance(allowedDomains = ["main0.ymax.app"]) {
+        const start = await startInstance(allowedDomains);
+
+        if ([200, 201, 202].includes(start.status)) {
+          return makeInstance(JSON.parse(start.body));
+        }
+        if (start.status === 409) {
+          return makeInstance(
+            await json(`/profiles/${profile.id}/instance`, undefined),
+          );
+        }
+
+        return requireStarted(start);
+      },
+      async provideFreshInstance(allowedDomains = ["main0.ymax.app"]) {
+        const start = await startInstance(allowedDomains);
+        if (start.status !== 409) return requireStarted(start);
+
+        const stopped = await status(`/profiles/${profile.id}/stop`, {
+          method: "POST",
+          body: "{}",
+        });
+        if (![200, 202, 204].includes(stopped.status)) {
+          throw Error(
+            `PinchTab profile stop failed with HTTP ${stopped.status}:\n${stopped.body}`,
+          );
+        }
+        return requireStarted(await startInstance(allowedDomains));
+      },
+    };
+  };
 
   return {
     async health() {
@@ -173,7 +199,7 @@ export const makePinchTabEndpoint = (
         body: JSON.stringify({
           name,
           description: "Dedicated funded YMax recording profile",
-          useWhen: "Use only for automated low-value YMax recordings",
+          useWhen: "Use only for operator-supervised low-value YMax recordings",
         }),
       });
       return makeProfile(created);
