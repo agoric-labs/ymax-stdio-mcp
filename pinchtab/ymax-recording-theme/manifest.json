@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "YMax Recording Profile Theme",
+  "version": "1.0.0",
+  "description": "High-contrast theme used to identify the ymax-flow1 recording profile.",
+  "theme": {
+    "colors": {
+      "bookmark_text": [24, 20, 28],
+      "frame": [106, 32, 138],
+      "frame_inactive": [68, 25, 88],
+      "ntp_background": [246, 240, 252],
+      "ntp_text": [24, 20, 28],
+      "tab_background_text": [255, 255, 255],
+      "tab_text": [24, 20, 28],
+      "toolbar": [246, 240, 252]
+    },
+    "tints": {
+      "buttons": [0.78, 0.35, 0.82]
+    }
+  }
+}

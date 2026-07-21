@@ -1,0 +1,11 @@
+{
+  "name": "ymax-agent-local-mcp",
+  "private": true,
+  "scripts": {
+    "pinchtab:smoke": "./pinchtab/smoke.ts",
+    "pinchtab:test": "node --test --import ts-blank-space/register pinchtab/smoke.test.ts"
+  },
+  "devDependencies": {
+    "ts-blank-space": "^0.9.0"
+  }
+}
