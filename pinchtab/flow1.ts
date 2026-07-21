@@ -62,7 +62,7 @@ export const findExpectedCreateUrl = (
   expectedUiUrl: string,
   maxInstruments = Number.POSITIVE_INFINITY,
 ) => {
-  const candidates = text.match(/https:\/\/[^\s<>"')]+/g) || [];
+  const candidates = text.match(/https:\/\/[^\s<>"')\]*`]+/g) || [];
   const expectedOrigin = new URL(expectedUiUrl).origin;
   for (const candidate of candidates) {
     const url = new URL(candidate.replace(/[.,;]+$/, ""));

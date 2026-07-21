@@ -44,7 +44,7 @@ const PROMPT = [
 ].join(" ");
 
 export const findExpectedGrantUrl = (text: string, expectedUiUrl: string) => {
-  const candidates = text.match(/https:\/\/[^\s<>"')]+/g) || [];
+  const candidates = text.match(/https:\/\/[^\s<>"')\]*`]+/g) || [];
   const expectedOrigin = new URL(expectedUiUrl).origin;
   for (const candidate of candidates) {
     const url = new URL(candidate.replace(/[.,;]+$/, ""));

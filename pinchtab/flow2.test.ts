@@ -14,7 +14,7 @@ const response = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
-test("Claude SDK gets every tool from only the local MCP server", async () => {
+test("Claude SDK gets every tool and resource from only the local MCP server", async () => {
   let call: any;
   const output = await runClaudeAgent("A DeFi user request", {
     cwd: "/repo",
@@ -46,8 +46,13 @@ test("Claude SDK gets every tool from only the local MCP server", async () => {
   assert.strictEqual(call.options.cwd, "/repo");
   assert.strictEqual(call.options.strictMcpConfig, true);
   assert.strictEqual(call.options.persistSession, true);
-  assert.deepStrictEqual(call.options.tools, []);
+  assert.deepStrictEqual(call.options.tools, [
+    "ListMcpResources",
+    "ReadMcpResource",
+  ]);
   assert.deepStrictEqual(call.options.allowedTools, [
+    "ListMcpResources",
+    "ReadMcpResource",
     "mcp__ymax-yield-agent__*",
   ]);
   assert.strictEqual(
@@ -69,6 +74,17 @@ test("grant URL must come from the configured YMax UI", () => {
         UI_URL,
       ),
     /did not return a valid/,
+  );
+});
+
+test("grant URL may be surrounded by Markdown formatting", () => {
+  assert.strictEqual(
+    findExpectedGrantUrl(`Prepared: **${GRANT_URL}**`, UI_URL),
+    GRANT_URL,
+  );
+  assert.strictEqual(
+    findExpectedGrantUrl(`Prepared: [review it](${GRANT_URL})`, UI_URL),
+    GRANT_URL,
   );
 });
 

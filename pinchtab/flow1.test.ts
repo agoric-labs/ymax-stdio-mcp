@@ -47,6 +47,20 @@ test("create URL must be an allocated create-and-delegate proposal from YMax", (
   );
 });
 
+test("create URL may be surrounded by Markdown formatting", () => {
+  assert.strictEqual(
+    findExpectedCreateUrl(`Here's your proposal: **${CREATE_URL}**`, UI_URL),
+    CREATE_URL,
+  );
+  assert.strictEqual(
+    findExpectedCreateUrl(
+      `Here's your proposal: [review it](${CREATE_URL})`,
+      UI_URL,
+    ),
+    CREATE_URL,
+  );
+});
+
 test("redemption must identify the portfolio, agent, and allocation authority", () => {
   assert.doesNotThrow(() =>
     validateRedemption(
