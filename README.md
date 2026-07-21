@@ -85,3 +85,8 @@ See [mcp-design.md](./mcp-design.md) for the full design rationale.
 ## Experience Reports
 
 Lessons learned from live mainnet operation — see [experience-reports.md](./experience-reports.md).
+
+## Seven-flow harness
+
+See [`pinchtab/README.md`](./pinchtab/README.md) for the YMax flow harness,
+including setup, safety boundaries, and current implementation status.

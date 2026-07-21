@@ -43,3 +43,28 @@ type(scope): short imperative summary
 ```
 
 Common types include `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, and `build`. Use a scope when it helps, such as `mcp-server` or `docs`.
+
+## TypeScript capability patterns
+
+- **Composition-Root Defaults** — only `main` connects ambient powers through
+  default arguments; helpers require explicit capabilities. See
+  `pinchtab/flow1.ts:113`.
+- **Explicit Agent Powers** — agent runners receive `query`, `cwd`, and `env`;
+  do not default them inside helpers. See `pinchtab/local-agent.ts:13`.
+- **Inferred Capability Surface** — prefer inferred local types and derive
+  public factory interfaces with `ReturnType`/`Awaited` rather than duplicating
+  object shapes. See `pinchtab/pinchtab-api.ts:184`.
+- **Local-MCP Full Surface** — expose all tools from the explicitly configured
+  stdio MCP server, with unrelated built-ins excluded. See
+  `pinchtab/local-agent.ts:40`.
+- **Expected-Artifact Validation** — the MCP produces proposal URLs; drivers
+  find and validate the expected origin and shape rather than recomputing them.
+  See `pinchtab/flow1.ts:58`.
+- **Extension Target Bridge** — address MetaMask notification targets through
+  Chromium debugging when PinchTab omits them from `/tabs`. See
+  `pinchtab/pinchtab-api.ts:82`.
+- **Origin-Bound Wallet Approval** — approve only recognized MetaMask actions
+  that visibly identify the configured YMax host. See
+  `pinchtab/flow1-browser.ts:43`.
+- **Explicit Real-Funds Knob** — real-money scripts require an explicit bounded
+  amount; never choose a spend amount by default. See `pinchtab/flow1.ts:19`.
