@@ -68,10 +68,9 @@ The server speaks MCP over stdio. Configure your MCP client to launch it with:
 
 | Resource | Description |
 |---|---|
-| `solver-constraints` | Multi-layer minimum transfer thresholds enforced by the YMax solver |
 | `provisioning-runbook` | Correct ordering: provision before grant |
 | `ymax-onboarding` | Complete onboarding guide with role boundaries and failure triage |
-| `ymax-allocation-delegate` | Allocation guardrails, candidate-building heuristics, and escalation rules |
+| `ymax-allocation-delegate` | Allocation guardrails, YDS candidate evaluation, and escalation rules |
 
 ## Architecture
 

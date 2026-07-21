@@ -27,6 +27,7 @@ import {
   type StateStore,
 } from './state.ts';
 import { toolError } from './responses.ts';
+import { ALL_RESOURCES, RESOURCE_BY_URI } from './resources.ts';
 import type { ToolResponse } from './types.ts';
 
 interface ServerPowers {
@@ -64,116 +65,6 @@ function loadDotEnv(env: NodeJS.ProcessEnv): void {
   }
 }
 
-const SOLVER_CONSTRAINTS = {
-  uri: 'solver-constraints',
-  name: 'Solver Minimum Transfer Thresholds',
-  description:
-    'Multi-layer minimum transfer amounts enforced by the YMax rebalance solver. Clients use this to size allocations before calling submit_target_allocation.',
-  mimeType: 'application/json',
-  text: JSON.stringify(
-    {
-      thresholds: [
-        {
-          name: 'CCTP hard runtime floor',
-          amount: '$1.00 (1,000,000 uusdc)',
-          layer: 'Hard Fail — bridge leg must be >= $1.00',
-          source: 'pos-evm.flows.ts:191-216',
-        },
-        {
-          name: 'Delta soft minimum',
-          amount: '$1.00 (1,000,000 uusdc)',
-          layer:
-            'Position deltas < $1.00 suppressed before solver sees them',
-          source: 'target-balances.ts:20',
-        },
-        {
-          name: 'CCTPv2 EVM->EVM link min',
-          amount: '$0.10 (100,000 uusdc)',
-          layer: 'LP coupling constraint',
-          source: 'prod-network.ts',
-        },
-        {
-          name: 'CCTP-from-Noble link min',
-          amount: '$1.00 (1,000,000 uusdc)',
-          layer: 'LP coupling constraint',
-          source: 'prod-network.ts',
-        },
-        {
-          name: 'Account dust epsilon',
-          amount: '$0.0001 (100 uusdc)',
-          layer: 'Balance filtering (not a practical constraint)',
-          source: 'constants.js:189-193',
-        },
-        {
-          name: 'Effective arc minimum (in practice)',
-          amount: '$1.47-$2.00',
-          layer:
-            'Combines link min + CCTP fee + delta soft min + arc interactions',
-          source: 'LP solver coupling constraints',
-        },
-      ],
-      practicalRules: [
-        'Same-chain deltas: >= $1.00 (about 2.2% weight at $45 TVL)',
-        'Cross-chain deltas: >= $2.00 (about 4.5% weight at $45 TVL)',
-        'At sub-$100 TVL, use deltas of +5 to +15 percentage points to avoid solver rejection',
-        'Residuals below $1.00 on non-native chain are likely stranded',
-      ],
-    },
-    null,
-    2,
-  ),
-};
-
-const PROVISIONING_RUNBOOK = {
-  uri: 'provisioning-runbook',
-  name: 'Provisioning Runbook',
-  description:
-    'Correct ordering for onboarding a YMax allocation delegate. Derived from live mainnet experience.',
-  mimeType: 'text/plain',
-  text: [
-    '1. generate_delegate_key - keygen + sponsor fund + smart-wallet provision (single atomic MCP tool)',
-    '2. propose_create - build a combined create-and-delegate UI link',
-    '3. User creates, funds, and delegates in one YMax UI flow',
-    '4. redeem_invitation - derive portfolio binding, redeem, and save state',
-    '5. submit_target_allocation - allocate (repeat as needed)',
-    '',
-    'Order matters: provision BEFORE the combined UI flow. A grant before provisioning produces a revoked agent.',
-    '',
-    'For complete onboarding instructions, read the ymax-onboarding resource.',
-  ].join('\n'),
-};
-
-const RESOURCES_DIR = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  'resources',
-);
-
-function readResource(filename: string): string {
-  const path = resolve(RESOURCES_DIR, filename);
-  if (!existsSync(path)) {
-    throw new Error(`resource file not found: ${path}`);
-  }
-  return readFileSync(path, 'utf8');
-}
-
-const ONBOARDING_SKILL = {
-  uri: 'ymax-onboarding',
-  name: 'YMax Agent Onboarding',
-  description:
-    'Complete onboarding guide: role boundaries, URL conventions, run order, failure triage, and reporting template. Read this when starting a new onboarding flow.',
-  mimeType: 'text/markdown',
-  text: readResource('onboarding.md'),
-};
-
-const ALLOCATION_SKILL = {
-  uri: 'ymax-allocation-delegate',
-  name: 'YMax Allocation Delegate',
-  description:
-    'Complete allocation delegate guide: scope, guardrails, candidate building heuristics, minimum transfer thresholds, verification protocol, and retry/escalation rules. Read this before submitting allocation changes.',
-  mimeType: 'text/markdown',
-  text: readResource('allocation.md'),
-};
-
 const server = new Server(
   {
     name: 'ymax-yield-agent',
@@ -192,9 +83,8 @@ const server = new Server(
       'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set - query via YDS to discover it.',
       'Use propose_edit when the user should approve a proposed allocation or instrument-set change in the UI.',
       'Use propose_grant when delegating allocation authority over an existing portfolio.',
-      'The solver enforces minimum transfer thresholds - consult solver-constraints resource for limits.',
       'Provision must happen BEFORE grant. See provisioning-runbook and ymax-onboarding resources for the full run order.',
-      'Before submitting an allocation, read ymax-allocation-delegate for guardrails, candidate-building heuristics, and escalation rules.',
+      'Before submitting an allocation, read ymax-allocation-delegate and use the current YDS OpenAPI specification to discover and run its planning simulation.',
     ].join('\n'),
   },
 );
@@ -297,18 +187,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
   ],
 }));
-
-const ALL_RESOURCES = [
-  SOLVER_CONSTRAINTS,
-  PROVISIONING_RUNBOOK,
-  ONBOARDING_SKILL,
-  ALLOCATION_SKILL,
-];
-
-const RESOURCE_BY_URI: Record<string, typeof SOLVER_CONSTRAINTS> = {};
-for (const r of ALL_RESOURCES) {
-  RESOURCE_BY_URI[r.uri] = r;
-}
 
 server.setRequestHandler(ListResourcesRequestSchema, async () => ({
   resources: ALL_RESOURCES.map(r => ({

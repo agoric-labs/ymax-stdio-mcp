@@ -6,7 +6,6 @@ YDS (YMax Data Service) is the read-only API for portfolio state, instruments, a
 
 - **Base URL**: `https://main0.ymax.app`
 - **Discover endpoints**: `GET /openapi.json` (OpenAPI 3.0 spec)
-- **Key endpoints**: `GET /portfolios/{portfolioId}`, `GET /instruments`, `GET /instruments/{id}/history`, `GET /portfolios/{portfolioId}/flows/{flowKey}`, `POST /plan/computeTargetBalances`
 
 Use the OpenAPI spec to discover available endpoints rather than hardcoding paths.
 
@@ -51,34 +50,20 @@ The portfolio endpoint returns both `targetAllocation` (desired weights) and `la
 - Instruments can be set to 0 weight (the solver will not route to them).
 - Keep the key set identical to the current allocation — no more, no less.
 
-### 4. Respect minimum transfer thresholds
+### 4. Evaluate the candidate with YDS
 
-Use `POST /plan/computeTargetBalances` on YDS to preview whether the solver will accept the candidate before submitting on-chain:
+Fetch the current YDS OpenAPI specification and discover its planning simulation
+operation. Evaluate the candidate against the latest portfolio amounts before
+submitting it on-chain. Build the request from the operation's current schema;
+do not rely on a hardcoded path or request shape.
 
-```
-POST https://main0.ymax.app/plan/computeTargetBalances
-{
-  "denom": "USDC",
-  "currentAmounts": { ... },
-  "targetAllocation": { ... },
-  "action": { "type": "rebalance" }
-}
-```
+If the result contains no affected places, revise the candidate and simulate it
+again. If YDS rejects the request, use its error and current OpenAPI schema to
+correct the candidate.
 
-If the response has `affectedPlaceCount: 0`, the solver found nothing to do (deltas too small or snapshot unavailable). Increase delta magnitude and retry.
-
-If the response is an error, the solver cannot route the candidate — read the error message for the reason.
-
-**Threshold rules** (at sub-$100 TVL):
-
-| Situation | Minimum |
-|---|---|
-| Same-chain delta | ≥ $1.00 (≥ ~2.2% weight) |
-| Cross-chain delta | ≥ $2.00 (≥ ~4.5% weight) — effective arc minimum often higher |
-| General sub-$100 TVL | +5 to +15 percentage point deltas to avoid rejection |
-| Residuals on non-native chain | Below CCTP floor — likely stranded |
-
-These thresholds scale with TVL. At higher TVLs, smaller percentage moves produce meaningful dollar amounts.
+The current simulation computes target balances; it does not guarantee that the
+LP route solver will find an executable cross-chain plan. Do not replace that
+missing guarantee with fixed thresholds inferred from earlier portfolios.
 
 ## Submit
 
@@ -104,7 +89,7 @@ Call `submit_target_allocation` with the allocation map. The MCP server:
 
 | On-chain Result | Action |
 |---|---|
-| `"Nothing to do for this operation"` | Increase delta magnitude (see threshold rules). The solver didn't see a meaningful change. |
+| `"Nothing to do for this operation"` | Refresh portfolio data, revise the candidate, and run the YDS planning simulation again. |
 | `"No feasible solution"` | Reduce cross-chain delta magnitude or simplify the routing pattern. LP coupling constraints made routing infeasible. |
 | `"unauthorized allocations for [...]"` | Remove the listed keys from your allocation. They are not in the portfolio's current key set. |
 | `"too small to relay"` | Increase the affected bridge leg above $1.00. A CCTP leg is below the hard runtime floor. |
@@ -114,7 +99,7 @@ Call `submit_target_allocation` with the allocation map. The MCP server:
 
 ## Solver Behavior Notes
 
-- The solver is sensitive to the delta pattern across all instruments simultaneously, not just individual deltas. Large cross-chain shifts may fail even when each individual leg meets the minimum thresholds.
+- The solver is sensitive to the delta pattern across all instruments simultaneously. A successful target-balance simulation does not guarantee that cross-chain routing will succeed.
 - Setting an instrument to 0 is permitted — the solver handles removal gracefully.
 - The solver will not create positions. If an instrument has no on-chain position, routing cannot start fresh capital there; you must zero-weight it.
 - After a successful submission, the solver produces a multi-step plan (CCTP bridges → ERC4626 deposits). Flow state tracks each step.

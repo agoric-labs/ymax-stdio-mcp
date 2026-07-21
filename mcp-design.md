@@ -162,25 +162,6 @@ Submits a `setTargetAllocation` transaction signed by the stored delegation key.
 
 ## Resources
 
-### Resource: `solver-constraints`
-
-Static reference documenting the multi-layer minimum transfer thresholds discovered in the iterative tweaks report. Clients use this to size allocations before calling `submit_target_allocation`.
-
-| Threshold | Amount | File | Layer |
-|---|---|---|---|
-| **CCTP hard runtime floor** | **$1.00** (1,000,000 uusdc) | `pos-evm.flows.ts:191-216` | Hard `Fail` — bridge leg **must** be ≥ $1.00 |
-| **Delta soft minimum** | **$1.00** (1,000,000 uusdc) | `target-balances.ts:20` | Position deltas < $1.00 suppressed before solver |
-| **CCTPv2 EVM→EVM link min** | **$0.10** (100,000 uusdc) | `prod-network.ts` | LP coupling constraint |
-| **CCTP-from-Noble link min** | **$1.00** (1,000,000 uusdc) | `prod-network.ts` | LP coupling constraint |
-| **Account dust epsilon** | **$0.0001** (100 uusdc) | `constants.js:189-193` | Balance filtering |
-| **Effective arc minimum (in practice)** | **$1.47–$2.00** | LP solver coupling | Combines link min + CCTP fee + delta soft min + arc interactions |
-
-**Practical rules at $45 TVL** ([iterative tweaks report Finding #7](./experience-report-iterative-allocation-tweaks.md#7-minimum-transfer-amounts-multi-layer-enforcement)):
-- Same-chain deltas: ≥ **$1.00** (≈ **2.2% weight**)
-- Cross-chain deltas: ≥ **$2.00** (≈ **4.5% weight**) — coupling constraints often demand more
-- At sub-$100 TVL, use deltas of **+5 to +15 percentage points** to avoid solver "Nothing to do"
-- Residuals below $1.00 on a non-native chain are **likely stranded** unless combined with new deposits
-
 ### Resource: `provisioning-runbook`
 
 Correct ordering derived from the onboarding report's painful lesson (grant-before-provisioning created `agent1` in revoked state):
@@ -251,7 +232,7 @@ The server depends on packages from the agoric-sdk worktree for:
 
 | Error | Likely Cause | Remediation |
 |---|---|---|
-| `"Nothing to do for this operation"` | Deltas below soft minimum or snapshot unavailable | Increase allocation deltas above $1.00 (same-chain) or $2.00 (cross-chain) |
+| `"Nothing to do for this operation"` | Candidate produced no actionable target changes or snapshot unavailable | Refresh portfolio data, revise the candidate, and run the current YDS planning simulation again |
 | `"No feasible solution"` | LP solver cannot find valid routing through arc coupling constraints | Reduce cross-chain delta magnitude or simplify the routing pattern |
 | `"unauthorized allocations for [...]"` | Instrument key not in portfolio's allowed set | Remove unrecognized keys from allocation (query via YDS to get current key set) |
 | `"Must have missing properties"` | Two positional args instead of single struct | Ensure MCP sends `{ targetAllocation, syncState }` |
