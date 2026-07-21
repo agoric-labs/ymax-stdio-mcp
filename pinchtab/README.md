@@ -17,17 +17,20 @@ not a per-change regression suite. PinchTab drives a dedicated headed browser;
 a local Claude session uses this repository's stdio MCP server; and MetaMask
 remains the human-controlled owner signer.
 
-Automation must stop before every wallet signature until that boundary is
-implemented and explicitly reviewed. The non-signing smoke and Flow 2 script
-currently enforce that rule.
+The harness never clicks wallet confirmations. Flow 1 hands control to the
+operator for wallet connection, the deposit, and signatures, then resumes its
+persisted local-agent session after the operator explicitly confirms
+completion. The non-signing smoke and Flow 2 script stop before any wallet
+signature.
 
 ## Status
 
 | Flow | Script | Current boundary |
 |---|---|---|
 | Browser/recording smoke | [`smoke.ts`](./smoke.ts) | Navigates, snapshots, and records without interaction |
+| 1. Create a new portfolio | [`flow1.ts`](./flow1.ts) | Complete, with operator-controlled wallet actions and post-signature invitation redemption |
 | 2. Add agent to existing portfolio | [`flow2.ts`](./flow2.ts) | Local agent creates a `/grant` proposal; browser stops before `Grant delegation` |
-| 1, 3–7 | — | Not implemented |
+| 3–7 | — | Not implemented |
 
 ## Prerequisites
 
@@ -136,6 +139,34 @@ PinchTab advertises `gif`, `webm`, and `mp4` recording formats but rejects
 ffmpeg could not infer a muxer from temporary filenames ending in
 `.mp4.encoding.tmp` or `.webm.encoding.tmp`, so the smoke script avoids those
 direct paths.
+
+## Run Flow 1 with operator-controlled signing
+
+Flow 1 asks the local Claude agent for a diversified initial allocation and a
+combined `/create-portfolio` proposal. The script validates the proposal's UI
+origin, allocation total, delegate address, and allocation permission before
+opening it in the dedicated PinchTab profile.
+
+Set the intended deposit explicitly; the driver rejects values above the
+30 USDC recording cap. It does not enter the amount, connect the wallet, click
+a transaction action, or automate MetaMask. After reviewing the allocation,
+the operator connects the dedicated wallet, enters the configured amount, and
+completes the create-and-delegate flow. Only then should the operator type
+`COMPLETE` in the terminal. The script resumes the same persisted Claude
+session, redeems the invitation, and verifies that the result identifies a
+portfolio, agent, and allocation authority.
+
+```sh
+YMAX_FLOW1_DEPOSIT_USDC=20 npm run pinchtab:flow1
+```
+
+This is a real-money workflow once the operator acts in the browser. The test
+suite exercises the complete orchestration with mocks and asserts that the
+driver makes no PinchTab action request:
+
+```sh
+npm run pinchtab:test
+```
 
 ## Run Flow 2 to the signature boundary
 

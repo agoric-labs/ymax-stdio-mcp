@@ -110,12 +110,12 @@ export const makePinchTabEndpoint = (
     getRecordingsDir() {
       return this.getFiles().join(".pinchtab-state", "recordings");
     },
-    async provideInstance() {
+    async provideInstance(allowedDomains = ["main0.ymax.app"]) {
       const start = await status(`/profiles/${profile.id}/start`, {
         method: "POST",
         body: JSON.stringify({
           headless: false,
-          securityPolicy: { allowedDomains: ["main0.ymax.app"] },
+          securityPolicy: { allowedDomains },
         }),
       });
 
@@ -168,6 +168,8 @@ export type PinchTabInstance = Awaited<
   ReturnType<PinchTabProfile["provideInstance"]>
 >;
 export type JsonRecord = Record<string, any>;
+export const getSnapshotNodes = (snapshot: JsonRecord | JsonRecord[]) =>
+  Array.isArray(snapshot) ? snapshot : snapshot.nodes || [];
 export const getPinchtabConfig = async (
   env: NodeJS.ProcessEnv,
   files: ReadableFile,

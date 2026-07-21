@@ -2,6 +2,7 @@
   "name": "ymax-agent-local-mcp",
   "private": true,
   "scripts": {
+    "pinchtab:flow1": "./pinchtab/flow1.ts",
     "pinchtab:flow2": "./pinchtab/flow2.ts",
     "pinchtab:smoke": "./pinchtab/smoke.ts",
     "pinchtab:test": "node --test --import ts-blank-space/register pinchtab/*.test.ts"

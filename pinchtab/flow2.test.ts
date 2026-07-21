@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  extractGrantUrl,
+  findExpectedGrantUrl,
   main,
   runClaudeAgent,
 } from "./flow2.ts";
@@ -59,12 +59,12 @@ test("Claude SDK gets every tool from only the local MCP server", async () => {
 
 test("grant URL must come from the configured YMax UI", () => {
   assert.strictEqual(
-    extractGrantUrl(`Prepared: ${GRANT_URL}`, UI_URL),
+    findExpectedGrantUrl(`Prepared: ${GRANT_URL}`, UI_URL),
     GRANT_URL,
   );
   assert.throws(
     () =>
-      extractGrantUrl(
+      findExpectedGrantUrl(
         "https://attacker.example/grant?accountHolder=agoric1delegate",
         UI_URL,
       ),
