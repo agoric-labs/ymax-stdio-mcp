@@ -46,13 +46,13 @@ const makeInitialPrompt = (amount: number, maxInstruments: number) =>
     "I prefer a diversified, yield-seeking allocation, while avoiding needless concentration.",
     `Keep it simple: use no more than ${maxInstruments} yield opportunities.`,
     "Please choose a sensible initial allocation, prepare this agent to manage allocations, and give me one YMax link where I can review and approve the portfolio creation and delegation.",
-    "Don't submit transactions or claim that I've approved anything; the portfolio driver will handle my dedicated wallet.",
+    "Agent-side transactions needed to prepare your access are in scope. Don't create the portfolio, submit owner-wallet transactions, or claim that I've approved anything; the portfolio driver will handle my dedicated wallet.",
   ].join(" ");
 
 const REDEEM_PROMPT = [
   "I've approved the portfolio creation and delegation in YMax.",
-  "Please finish setting up your access, then report the portfolio, agent, and permissions you received.",
-  "Do not change the allocation or submit any other portfolio transaction.",
+  "Please redeem the invitation to finish setting up your access, then report the portfolio, agent, and permissions you received.",
+  "Do not change the allocation or submit any transaction beyond the invitation redemption.",
 ].join(" ");
 
 // Pattern: Expected-Artifact Validation. The MCP computes the URL; the driver

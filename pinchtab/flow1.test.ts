@@ -168,9 +168,12 @@ test("flow 1 automates the wallet flow, then redeems in the same session", async
   assert.strictEqual(agentCalls.length, 2);
   assert.match(agentCalls[0].prompt, /3 USDC/);
   assert.match(agentCalls[0].prompt, /no more than 1 yield opportunities/);
+  assert.match(agentCalls[0].prompt, /Agent-side transactions.*in scope/);
+  assert.match(agentCalls[0].prompt, /Don't create the portfolio.*owner-wallet/);
   assert.doesNotMatch(agentCalls[0].prompt, /generate_delegate_key|propose_create/);
   assert.strictEqual(agentCalls[1].options.resume, "session-1");
-  assert.match(agentCalls[1].prompt, /approved/);
+  assert.match(agentCalls[1].prompt, /approved.*redeem the invitation/s);
+  assert.match(agentCalls[1].prompt, /beyond the invitation redemption/);
   assert.strictEqual(ownerFlowCall.options.amount, 3);
   assert.strictEqual(ownerFlowCall.options.uiUrl, UI_URL);
   assert.ok(urls.includes("http://127.0.0.1:9870/navigate"));

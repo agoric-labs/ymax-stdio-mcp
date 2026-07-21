@@ -26,7 +26,8 @@
     "allowUpload": false,
     "allowFileScheme": false,
     "allowedDomains": [
-      "main0.ymax.app"
+      "main0.ymax.app",
+      "staging-agentic-ui.ymax0-ui.pages.dev"
     ],
     "attach": {
       "enabled": false,

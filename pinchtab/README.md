@@ -91,6 +91,11 @@ means the wallet did not load.
 Before a real recording, have an operator check all of these conditions:
 
 1. The profile is dedicated to this harness and is not a personal wallet.
+   Its total funds and permissions bound the worst-case economic loss: Flow 1
+   checks the requesting host and approval-button shape, but it does not
+   validate transaction amounts, spenders, contract methods, or gas. Keep only
+   the assets and gas that the operator accepts putting at risk, across every
+   network available to the profile.
 2. The browser is headed and the only permitted navigation domains are YMax
    domains needed by the flow.
 3. The funding EOA mnemonic is supplied only through an ignored local secret
@@ -146,6 +151,10 @@ combined `/create-portfolio` proposal. The script validates the proposal's UI
 origin, allocation total, delegate address, and allocation permission before
 opening it in the dedicated PinchTab profile.
 
+Flow 1 targets the branch-preview UI by default. The PinchTab profile must
+allow `staging-agentic-ui.ymax0-ui.pages.dev`; allowing only `main0.ymax.app`
+will block the proposal navigation.
+
 The operator's job ends after setting up and funding MetaMask in the dedicated
 profile. Set the intended deposit explicitly; the driver rejects values above
 the 30 USDC recording cap. `YMAX_FLOW1_MAX_INSTRUMENTS` defaults to 3 and
@@ -166,7 +175,10 @@ npm run pinchtab:flow1
 
 Setting `YMAX_FLOW1_DEPOSIT_USDC` and running the script authorizes a real-money
 workflow; there is no later operator checkpoint. The test suite exercises the
-complete YMax and MetaMask orchestration with mocks:
+complete YMax and MetaMask orchestration with mocks. The deposit cap is not a
+transaction-semantic check: the operator is responsible for limiting the
+dedicated profile's total funds and permissions to an acceptable loss. Run the
+tests with:
 
 ```sh
 npm run pinchtab:test
