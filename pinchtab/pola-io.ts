@@ -1,3 +1,5 @@
+import type { ReadableFile } from "./pola-io.ts";
+
 const { freeze } = Object;
 
 export type FsPower = Pick<
@@ -63,3 +65,21 @@ export const makeCommand =
   ) =>
   (args: readonly string[]) =>
     execFile(file, args);
+export const joinTailUnder = (
+  file: { toString(): string },
+  directory: ReadableFile,
+) => {
+  const directoryPath = directory.toString().replace(/\/+$/, "");
+  const filePath = file.toString();
+  const prefix = `${directoryPath}/`;
+  if (filePath !== directoryPath && !filePath.startsWith(prefix)) {
+    throw Error(
+      `PinchTab returned a recording outside the expected directory: ${filePath}`,
+    );
+  }
+  const tail = filePath.slice(prefix.length);
+  if (tail.split("/").includes("..")) {
+    throw Error(`PinchTab returned an unsafe recording path: ${filePath}`);
+  }
+  return tail ? directory.join(tail) : directory;
+};

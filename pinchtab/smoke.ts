@@ -4,18 +4,21 @@
 import { execFile as execFileCb } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { makePinchTabEndpoint, type PinchTabInstance } from "./pinchtab-api.ts";
+import {
+  getPinchtabConfig,
+  makePinchTabEndpoint,
+  type PinchTabInstance,
+} from "./pinchtab-api.ts";
 import {
   hasErrorCode,
+  joinTailUnder,
   makeCommand,
   makeFileRW,
   type ReadableFile,
   type WritableFile,
 } from "./pola-io.ts";
 
-const execFile = promisify(execFileCb);
-
-const getRecordingFormat = (format = "mp4") => {
+export const getRecordingFormat = (format = "mp4") => {
   switch (format) {
     case "gif":
     case "mp4":
@@ -28,82 +31,11 @@ const getRecordingFormat = (format = "mp4") => {
   }
 };
 
-export const getPinchtabConfig = async (
-  env: NodeJS.ProcessEnv,
-  files: ReadableFile,
-) => {
-  const { PINCHTAB_TOKEN, PINCHTAB_CONFIG, XDG_CONFIG_HOME, HOME } = env;
-  let token = PINCHTAB_TOKEN;
-  if (PINCHTAB_TOKEN) {
-    token = PINCHTAB_TOKEN;
-  } else {
-    const candidates = [];
-    if (PINCHTAB_CONFIG) {
-      candidates.push(files.join(PINCHTAB_CONFIG));
-    }
-    const configBase = XDG_CONFIG_HOME || (HOME && `${HOME}/.config`);
-    if (configBase) {
-      candidates.push(files.join(configBase, "pinchtab", "config.json"));
-    }
-    if (HOME) {
-      candidates.push(files.join(HOME, ".pinchtab", "config.json"));
-    }
-
-    for (const configFile of candidates) {
-      try {
-        const config = await configFile.readJSON();
-        token = config?.server?.token;
-        if (typeof token === "string" && token) {
-          break;
-        }
-      } catch (error) {
-        if (!hasErrorCode(error, "ENOENT")) {
-          throw error;
-        }
-      }
-    }
-  }
-
-  if (typeof token !== "string" || !token) {
-    throw Error(
-      "Set PINCHTAB_TOKEN or configure server.token in the local PinchTab config.",
-    );
-  }
-
-  return {
-    token,
-    serverUrl: env.PINCHTAB_SERVER_URL || "http://127.0.0.1:9867",
-    profileName: env.PINCHTAB_YMAX_PROFILE || "ymax-flow1",
-    artifactDir: env.PINCHTAB_ARTIFACT_DIR || "artifacts",
-    recordingFormat: getRecordingFormat(env.PINCHTAB_RECORDING_FORMAT),
-    ffmpeg: env.PINCHTAB_FFMPEG_BIN || "ffmpeg",
-  };
-};
-
 const assertFileExists = async (file: ReadableFile) => {
   const stats = await file.stat();
   if (!stats.isFile() || Number(stats.size) <= 0) {
     throw Error(`PinchTab did not write a non-empty recording: ${file}`);
   }
-};
-
-const joinTailUnder = (
-  file: { toString(): string },
-  directory: ReadableFile,
-) => {
-  const directoryPath = directory.toString().replace(/\/+$/, "");
-  const filePath = file.toString();
-  const prefix = `${directoryPath}/`;
-  if (filePath !== directoryPath && !filePath.startsWith(prefix)) {
-    throw Error(
-      `PinchTab returned a recording outside the expected directory: ${filePath}`,
-    );
-  }
-  const tail = filePath.slice(prefix.length);
-  if (tail.split("/").includes("..")) {
-    throw Error(`PinchTab returned an unsafe recording path: ${filePath}`);
-  }
-  return tail ? directory.join(tail) : directory;
 };
 
 const convertGif = async (
@@ -122,12 +54,7 @@ const convertGif = async (
           "-vf",
           "scale=trunc(iw/2)*2:trunc(ih/2)*2",
         ]
-      : [
-          "-c:v",
-          "libvpx-vp9",
-          "-pix_fmt",
-          "yuva420p",
-        ];
+      : ["-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p"];
 
   try {
     await ffmpeg([
@@ -193,7 +120,7 @@ export const main = async (
     fspP = import("node:fs/promises"),
     pathP = import("node:path"),
     delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
-    execFile: execFilePower = execFile,
+    execFile = promisify(execFileCb),
     log = console.log,
   } = {},
 ) => {
@@ -207,7 +134,7 @@ export const main = async (
     config.token,
     files,
   );
-  const ffmpeg = makeCommand(execFilePower, config.ffmpeg);
+  const ffmpeg = makeCommand(execFile, config.ffmpeg);
   const artifacts = files.join(config.artifactDir);
 
   await artifacts.mkdir();

@@ -1,4 +1,9 @@
-import type { WritableFile } from "./pola-io.ts";
+import {
+  hasErrorCode,
+  type ReadableFile,
+  type WritableFile,
+} from "./pola-io.ts";
+import { getRecordingFormat } from "./smoke.ts";
 
 export const makePinchTabEndpoint = (
   fetch: typeof globalThis.fetch,
@@ -163,3 +168,54 @@ export type PinchTabInstance = Awaited<
   ReturnType<PinchTabProfile["provideInstance"]>
 >;
 export type JsonRecord = Record<string, any>;
+export const getPinchtabConfig = async (
+  env: NodeJS.ProcessEnv,
+  files: ReadableFile,
+) => {
+  const { PINCHTAB_TOKEN, PINCHTAB_CONFIG, XDG_CONFIG_HOME, HOME } = env;
+  let token = PINCHTAB_TOKEN;
+  if (PINCHTAB_TOKEN) {
+    token = PINCHTAB_TOKEN;
+  } else {
+    const candidates = [];
+    if (PINCHTAB_CONFIG) {
+      candidates.push(files.join(PINCHTAB_CONFIG));
+    }
+    const configBase = XDG_CONFIG_HOME || (HOME && `${HOME}/.config`);
+    if (configBase) {
+      candidates.push(files.join(configBase, "pinchtab", "config.json"));
+    }
+    if (HOME) {
+      candidates.push(files.join(HOME, ".pinchtab", "config.json"));
+    }
+
+    for (const configFile of candidates) {
+      try {
+        const config = await configFile.readJSON();
+        token = config?.server?.token;
+        if (typeof token === "string" && token) {
+          break;
+        }
+      } catch (error) {
+        if (!hasErrorCode(error, "ENOENT")) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  if (typeof token !== "string" || !token) {
+    throw Error(
+      "Set PINCHTAB_TOKEN or configure server.token in the local PinchTab config.",
+    );
+  }
+
+  return {
+    token,
+    serverUrl: env.PINCHTAB_SERVER_URL || "http://127.0.0.1:9867",
+    profileName: env.PINCHTAB_YMAX_PROFILE || "ymax-flow1",
+    artifactDir: env.PINCHTAB_ARTIFACT_DIR || "artifacts",
+    recordingFormat: getRecordingFormat(env.PINCHTAB_RECORDING_FORMAT),
+    ffmpeg: env.PINCHTAB_FFMPEG_BIN || "ffmpeg",
+  };
+};
