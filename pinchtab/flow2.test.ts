@@ -99,8 +99,10 @@ test("flow 2 stops before the Grant delegation MetaMask signature", async () => 
       return response([{ id: "prof_2", name: "ymax-flow1", path: "/tmp/p" }]);
     }
     if (href.endsWith("/profiles/prof_2/start")) {
-      return response({ port: 9870 }, 201);
+      return response({ id: "inst_2", port: 9870 }, 201);
     }
+    if (href.endsWith("/instances"))
+      return response([{ id: "inst_2", port: 9870, status: "running" }]);
     if (href.endsWith("/navigate")) return response({ ok: true });
     if (href.endsWith("/snapshot?filter=interactive")) {
       return response({
@@ -182,8 +184,10 @@ test("flow 2 rejects a profile that is not already connected", async () => {
       return response([{ id: "prof_2", name: "ymax-flow1", path: "/tmp/p" }]);
     }
     if (href.endsWith("/profiles/prof_2/start")) {
-      return response({ port: 9870 }, 201);
+      return response({ id: "inst_2", port: 9870 }, 201);
     }
+    if (href.endsWith("/instances"))
+      return response([{ id: "inst_2", port: 9870, status: "running" }]);
     if (href.endsWith("/navigate")) return response({ ok: true });
     if (href.endsWith("/snapshot?filter=interactive")) {
       return response({

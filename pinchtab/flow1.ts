@@ -189,6 +189,7 @@ export const main = async (
     config.serverUrl,
     config.token,
     files,
+    { delay },
   );
   const uiUrl =
     env.YMAX_UI_URL || "https://staging-agentic-ui.ymax0-ui.pages.dev";

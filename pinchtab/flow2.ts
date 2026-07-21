@@ -74,6 +74,8 @@ export const main = async (
     pathP = import("node:path"),
     query = queryClaude,
     cwd = process.cwd(),
+    delay = (milliseconds: number) =>
+      new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
   } = {},
 ) => {
   const fsp = await fspP;
@@ -85,6 +87,7 @@ export const main = async (
     config.serverUrl,
     config.token,
     files,
+    { delay },
   );
 
   console.info(

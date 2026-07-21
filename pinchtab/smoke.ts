@@ -134,6 +134,7 @@ export const main = async (
     config.serverUrl,
     config.token,
     files,
+    { delay },
   );
   const ffmpeg = makeCommand(execFile, config.ffmpeg);
   const artifactDir = path.isAbsolute(config.artifactDir)

@@ -41,8 +41,10 @@ const makePinchtabFetch = (events: string[], bodies: unknown[]) =>
       if (href.endsWith("/profiles/prof_1/start")) {
         startAttempts += 1;
         if (startAttempts === 1) return response("already running", 409);
-        return response({ port: 9870 }, 201);
+        return response({ id: "inst_1", port: 9870, status: "starting" }, 201);
       }
+      if (href.endsWith("/instances"))
+        return response([{ id: "inst_1", port: 9870, status: "running" }]);
       if (href.endsWith("/profiles/prof_1/stop")) {
         events.push("profile:stop");
         return response({ status: "stopped" });

@@ -10,6 +10,13 @@ export const makePinchTabEndpoint = (
   baseUrl: string,
   token: string,
   files: WritableFile,
+  {
+    delay,
+    startupAttempts = 30,
+  }: {
+    delay: (milliseconds: number) => Promise<unknown>;
+    startupAttempts?: number;
+  },
 ) => {
   const request = (url: string, init?: RequestInit) => {
     const options = init || {};
@@ -127,9 +134,34 @@ export const makePinchTabEndpoint = (
           securityPolicy: { allowedDomains },
         }),
       });
+    const waitForRunning = async (started: JsonRecord) => {
+      if (!started.id) {
+        throw Error(
+          `PinchTab did not return an instance ID:\n${JSON.stringify(started)}`,
+        );
+      }
+      let lastStatus = started.status;
+      for (let attempt = 0; attempt < startupAttempts; attempt += 1) {
+        const instances = await json("/instances", undefined);
+        const current = instances.find(
+          (instance: JsonRecord) => instance.id === started.id,
+        );
+        lastStatus = current?.status;
+        if (lastStatus === "running") {
+          return makeInstance(current);
+        }
+        if (lastStatus === "error") {
+          throw Error(`PinchTab instance ${started.id} entered status 'error'.`);
+        }
+        if (attempt + 1 < startupAttempts) await delay(1000);
+      }
+      throw Error(
+        `PinchTab instance ${started.id} did not become running within ${startupAttempts} seconds; last status: ${lastStatus || "not found"}.`,
+      );
+    };
     const requireStarted = async (start: Awaited<ReturnType<typeof status>>) => {
       if ([200, 201, 202].includes(start.status)) {
-        return makeInstance(JSON.parse(start.body));
+        return waitForRunning(JSON.parse(start.body));
       }
       throw Error(
         `PinchTab profile start failed with HTTP ${start.status}:\n${start.body}`,
@@ -153,7 +185,7 @@ export const makePinchTabEndpoint = (
         const start = await startInstance(allowedDomains);
 
         if ([200, 201, 202].includes(start.status)) {
-          return makeInstance(JSON.parse(start.body));
+          return requireStarted(start);
         }
         if (start.status === 409) {
           return makeInstance(
