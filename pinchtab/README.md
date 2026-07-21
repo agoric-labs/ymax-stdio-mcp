@@ -146,14 +146,21 @@ direct paths.
 
 ## Run automated Flow 1
 
-Flow 1 asks the local Claude agent for a diversified initial allocation and a
-combined `/create-portfolio` proposal. The script validates the proposal's UI
-origin, allocation total, delegate address, and allocation permission before
-opening it in the dedicated PinchTab profile.
+Flow 1 asks the local Claude agent for a diversified initial allocation using
+only instruments on Base, then a combined `/create-portfolio` proposal. The
+script validates the proposal's UI origin, Base-only instruments, allocation
+total, delegate address, and allocation permission before opening it in the
+dedicated PinchTab profile.
 
 Flow 1 targets the branch-preview UI by default. The PinchTab profile must
 allow `staging-agentic-ui.ymax0-ui.pages.dev`; allowing only `main0.ymax.app`
 will block the proposal navigation.
+
+Flow 1 also requires a blank MCP state so it provisions a new delegate for the
+new portfolio. If `mcp-server/state.json` exists (or the file selected by
+`YMAX_STATE_FILE` exists), the script exits before starting Claude and tells the
+operator which file to remove. Archive it first if its existing delegation may
+be needed later.
 
 The operator's job ends after setting up and funding MetaMask in the dedicated
 profile. Set the intended deposit explicitly; the driver rejects values above

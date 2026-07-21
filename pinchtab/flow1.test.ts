@@ -15,6 +15,13 @@ const response = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
+const missingStateFspP = () =>
+  Promise.resolve({
+    stat: async () => {
+      throw Object.assign(Error("not found"), { code: "ENOENT" });
+    },
+  } as any);
+
 test("create URL must be an allocated create-and-delegate proposal from YMax", () => {
   assert.strictEqual(
     findExpectedCreateUrl(`Here is your proposal: ${CREATE_URL}`, UI_URL),
@@ -41,6 +48,14 @@ test("create URL must be an allocated create-and-delegate proposal from YMax", (
     () =>
       findExpectedCreateUrl(
         `${UI_URL}/create-portfolio?accountHolder=agoric1delegate&permissions=change-allocations`,
+        UI_URL,
+      ),
+    /valid create-and-delegate/,
+  );
+  assert.throws(
+    () =>
+      findExpectedCreateUrl(
+        `${UI_URL}/create-portfolio?Aave_Ethereum=100&accountHolder=agoric1delegate&permissions=change-allocations`,
         UI_URL,
       ),
     /valid create-and-delegate/,
@@ -122,6 +137,30 @@ test("flow 1 requires a bounded integer instrument count", async () => {
   }
 });
 
+test("flow 1 refuses existing MCP state before starting the agent", async () => {
+  let agentCalled = false;
+  await assert.rejects(
+    () =>
+      main(
+        {
+          PINCHTAB_TOKEN: "test-token",
+          YMAX_FLOW1_DEPOSIT_USDC: "3",
+        },
+        {
+          fspP: Promise.resolve({
+            stat: async () => ({}) as any,
+          } as any),
+          query: (() => {
+            agentCalled = true;
+            throw Error("the state preflight must precede the agent");
+          }) as any,
+        },
+      ),
+    /blank MCP state.*Remove .*mcp-server\/state\.json/s,
+  );
+  assert.strictEqual(agentCalled, false);
+});
+
 test("flow 1 automates the wallet flow, then redeems in the same session", async () => {
   const urls: string[] = [];
   const bodies: unknown[] = [];
@@ -166,6 +205,7 @@ test("flow 1 automates the wallet flow, then redeems in the same session", async
       YMAX_FLOW1_MAX_INSTRUMENTS: "1",
     },
     {
+      fspP: missingStateFspP(),
       fetch: fetch as typeof globalThis.fetch,
       query,
       ownerFlow: async (instance, options) => {
@@ -182,12 +222,17 @@ test("flow 1 automates the wallet flow, then redeems in the same session", async
   assert.strictEqual(agentCalls.length, 2);
   assert.match(agentCalls[0].prompt, /3 USDC/);
   assert.match(agentCalls[0].prompt, /no more than 1 yield opportunities/);
-  assert.match(agentCalls[0].prompt, /Agent-side transactions.*in scope/);
-  assert.match(agentCalls[0].prompt, /Don't create the portfolio.*owner-wallet/);
-  assert.doesNotMatch(agentCalls[0].prompt, /generate_delegate_key|propose_create/);
+  assert.match(agentCalls[0].prompt, /only.*Base chain/i);
+  assert.match(agentCalls[0].prompt, /help me create.*manage its allocations/);
+  assert.match(agentCalls[0].prompt, /I'll handle any wallet approvals/);
+  assert.doesNotMatch(
+    agentCalls[0].prompt,
+    /link where|review and approve|portfolio driver|Agent-side transactions|generate_delegate_key|propose_create/,
+  );
   assert.strictEqual(agentCalls[1].options.resume, "session-1");
-  assert.match(agentCalls[1].prompt, /approved.*redeem the invitation/s);
-  assert.match(agentCalls[1].prompt, /beyond the invitation redemption/);
+  assert.match(agentCalls[1].prompt, /approved.*finish setting up your access/s);
+  assert.match(agentCalls[1].prompt, /Don't make any allocation changes yet/);
+  assert.doesNotMatch(agentCalls[1].prompt, /redeem|invitation/);
   assert.strictEqual(ownerFlowCall.options.amount, 3);
   assert.strictEqual(ownerFlowCall.options.uiUrl, UI_URL);
   assert.ok(urls.includes("http://127.0.0.1:9870/navigate"));
@@ -208,6 +253,7 @@ test("flow 1 does not redeem if the automated wallet flow fails", async () => {
           YMAX_FLOW1_DEPOSIT_USDC: "20",
         },
         {
+          fspP: missingStateFspP(),
           fetch: (async (url: string | URL | Request) => {
             const href = String(url);
             if (href.endsWith("/health")) return response({});

@@ -14,7 +14,7 @@ import {
   runClaudeAgentTurn,
   type AgentQuery,
 } from "./local-agent.ts";
-import { makeFileRW } from "./pola-io.ts";
+import { hasErrorCode, makeFileRW } from "./pola-io.ts";
 
 // Pattern: Explicit Real-Funds Knob. A run cannot spend an implicit/default
 // amount.
@@ -44,15 +44,16 @@ const makeInitialPrompt = (amount: number, maxInstruments: number) =>
   [
     `I want to create a new YMax portfolio with ${amount} USDC.`,
     "I prefer a diversified, yield-seeking allocation, while avoiding needless concentration.",
+    "For now, only use yield opportunities on the Base chain so withdrawals are quick during testing.",
     `Keep it simple: use no more than ${maxInstruments} yield opportunities.`,
-    "Please choose a sensible initial allocation, prepare this agent to manage allocations, and give me one YMax link where I can review and approve the portfolio creation and delegation.",
-    "Agent-side transactions needed to prepare your access are in scope. Don't create the portfolio, submit owner-wallet transactions, or claim that I've approved anything; the portfolio driver will handle my dedicated wallet.",
+    "Please choose a sensible initial allocation and help me create the portfolio so you can manage its allocations.",
+    "I'll handle any wallet approvals.",
   ].join(" ");
 
 const REDEEM_PROMPT = [
-  "I've approved the portfolio creation and delegation in YMax.",
-  "Please redeem the invitation to finish setting up your access, then report the portfolio, agent, and permissions you received.",
-  "Do not change the allocation or submit any transaction beyond the invitation redemption.",
+  "I've approved the portfolio setup in YMax.",
+  "Please finish setting up your access, then report the portfolio, agent, and permissions you received.",
+  "Don't make any allocation changes yet.",
 ].join(" ");
 
 // Pattern: Expected-Artifact Validation. The MCP computes the URL; the driver
@@ -85,6 +86,7 @@ export const findExpectedCreateUrl = (
       url.searchParams.getAll("permissions").length === 1 &&
       allocationValues.length > 0 &&
       allocationValues.length <= maxInstruments &&
+      allocationEntries.every(([name]) => name.endsWith("_Base")) &&
       allocationValues.every((value) => Number.isFinite(value) && value >= 0) &&
       Math.abs(allocationTotal - 100) < 0.000_001
     ) {
@@ -145,6 +147,25 @@ export const main = async (
   const fsp = await fspP;
   const path = await pathP;
   const files = makeFileRW("/", { fsp, path });
+  const statePath = path.resolve(
+    cwd,
+    env.YMAX_STATE_FILE || "mcp-server/state.json",
+  );
+  const stateExists = await files
+    .join(statePath)
+    .stat()
+    .then(
+      () => true,
+      (error) => {
+        if (hasErrorCode(error, "ENOENT")) return false;
+        throw error;
+      },
+    );
+  if (stateExists) {
+    throw Error(
+      `Flow 1 requires a blank MCP state. Remove ${statePath} before rerunning Flow 1.`,
+    );
+  }
   const config = await getPinchtabConfig(env, files.readOnly());
   const pinchtab = makePinchTabEndpoint(
     fetch,
