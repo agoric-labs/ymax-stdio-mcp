@@ -1,14 +1,33 @@
-# PinchTab recording spike
+# YMax seven-flow recording harness
 
-This is the first browser-automation spike for the YMax recording harness. It
-uses a dedicated, headed PinchTab profile to drive the user-facing
-`https://main0.ymax.app` flow while the local MCP server remains the separate,
-delegated transaction actor.
+This directory contains the on-demand recording harness for the seven YMax
+agent flows requested in
+https://github.com/kriskowal/garden/issues/57:
 
-The spike deliberately stops before a signature or any portfolio-changing
-action. An operator must inspect the headed browser and approve every wallet
-signature. It is therefore safe to use for validating browser launch,
-navigation, accessibility snapshots, and video capture without spending funds.
+1. Create mandate through chat for a new portfolio.
+2. Add agent through chat for an existing portfolio.
+3. Change mandate with agent.
+4. Agent takes live action within mandate.
+5. Show out-of-mandate enforcement and rejection.
+6. Show async agent action within mandate.
+7. Show activity screen agent/user attribution.
+
+These are production-adjacent demonstrations against YMax on Agoric mainnet,
+not a per-change regression suite. PinchTab drives a dedicated headed browser;
+a local Claude session uses this repository's stdio MCP server; and MetaMask
+remains the human-controlled owner signer.
+
+Automation must stop before every wallet signature until that boundary is
+implemented and explicitly reviewed. The non-signing smoke and Flow 2 script
+currently enforce that rule.
+
+## Status
+
+| Flow | Script | Current boundary |
+|---|---|---|
+| Browser/recording smoke | [`smoke.ts`](./smoke.ts) | Navigates, snapshots, and records without interaction |
+| 2. Add agent to existing portfolio | [`flow2.ts`](./flow2.ts) | Local agent creates a `/grant` proposal; browser stops before `Grant delegation` |
+| 1, 3–7 | — | Not implemented |
 
 ## Prerequisites
 
@@ -17,6 +36,12 @@ navigation, accessibility snapshots, and video capture without spending funds.
   it does not load MetaMask for this harness even when PinchTab passes the
   right flags. The local working binary was
   `/home/connolly/.nix-profile/bin/chromium`.
+- Claude Code authenticated for the local user. Flow 2 uses the Claude Agent
+  SDK and persists its native session for inspection with tools such as
+  AgentsView.
+- The MCP server dependencies installed in [`../mcp-server`](../mcp-server), a
+  built [`../agoric-sdk`](../agoric-sdk) worktree, and the sponsor environment
+  needed by `generate_delegate_key`.
 - A PinchTab server bound to `127.0.0.1`, with its generated bearer token kept
   outside this repository.
 - An unpacked wallet extension placed in the PinchTab extensions directory, or
@@ -47,10 +72,12 @@ The optional [`ymax-recording-theme`](./ymax-recording-theme/manifest.json)
 extension gives the recording profile a distinctive browser frame. Load it
 alongside MetaMask when starting the YMax profile.
 
-Create a `ymax-flow1` profile through the PinchTab dashboard or API and load a
-low-balance, dedicated wallet into it manually. This profile represents the
-user side of the recording. The MCP server's delegate key remains separate and
-must not be installed in the browser profile.
+Create a dedicated profile through the PinchTab dashboard or API and load a
+low-balance wallet into it manually. `smoke.ts` defaults to the historical
+`ymax-flow1` profile name; select a flow-specific profile with
+`PINCHTAB_YMAX_PROFILE`. This profile represents the owner side of a recording.
+The MCP server's delegate key remains separate and must not be installed in the
+browser profile.
 
 Verify the extension load before importing or creating a wallet. In the headed
 browser, open `chrome://extensions/` and confirm MetaMask is listed. A stronger
@@ -110,11 +137,40 @@ ffmpeg could not infer a muxer from temporary filenames ending in
 `.mp4.encoding.tmp` or `.webm.encoding.tmp`, so the smoke script avoids those
 direct paths.
 
-## Next boundary
+## Run Flow 2 to the signature boundary
 
-Once the smoke has been observed in a local headed browser, the next increment
-is an operator-supervised Flow 1 recording: the browser actor creates the
-portfolio and the MCP actor performs only the delegated action it has been
-granted. The browser automation must pause before every wallet signature and
-must record the post-run withdrawal/reconciliation result. This repository
-does not yet automate that real-funds step.
+Flow 2 gives a Claude Agent SDK session access to every tool on this
+repository's stdio MCP server. The user-facing prompt asks Claude to prepare a
+delegation link without naming implementation-level tools. The script validates
+that the returned URL belongs to the configured YMax UI, opens it with PinchTab,
+checks for the `New agent` page and `Grant delegation` action, and then
+intentionally throws:
+
+```text
+Error: TODO: click Grant delegation and handle the first MetaMask signature
+```
+
+The script prints the Claude session ID, MCP tool calls, and assistant text as
+they arrive. Claude's native session persistence remains enabled, so AgentsView
+can observe and retain the complete structured session without a PTY recorder.
+Browser navigation begins after Claude returns its grant URL.
+
+Use a dedicated profile whose wallet is already connected and owns an existing
+portfolio. The script rejects a page showing `Connect Wallet`; it does not open
+or automate MetaMask.
+
+```sh
+PINCHTAB_YMAX_PROFILE=ymax-flow2 npm run pinchtab:flow2
+```
+
+The stdio MCP server loads `mcp-server/.env` itself; Flow 2 neither reads nor
+preflights the sponsor credential. `generate_delegate_key` may fund and
+provision a new delegate on mainnet, so use only the dedicated low-value sponsor
+described above.
+
+## Remaining boundary
+
+The next Flow 2 increment is operator-supervised MetaMask handling, invitation
+redemption, and post-run reconciliation. Later scripts should retain the same
+separation: the browser profile owns the portfolio, the local MCP process owns
+only its delegate key, and every owner signature is an explicit checkpoint.

@@ -122,6 +122,7 @@ export const main = async (
     delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
     execFile = promisify(execFileCb),
     log = console.log,
+    cwd = process.cwd(),
   } = {},
 ) => {
   const fsp = await fspP;
@@ -135,7 +136,10 @@ export const main = async (
     files,
   );
   const ffmpeg = makeCommand(execFile, config.ffmpeg);
-  const artifacts = files.join(config.artifactDir);
+  const artifactDir = path.isAbsolute(config.artifactDir)
+    ? config.artifactDir
+    : path.join(cwd, config.artifactDir);
+  const artifacts = files.join(artifactDir);
 
   await artifacts.mkdir();
   await pinchtab.health();

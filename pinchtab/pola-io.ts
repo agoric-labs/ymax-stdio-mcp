@@ -1,5 +1,3 @@
-import type { ReadableFile } from "./pola-io.ts";
-
 const { freeze } = Object;
 
 export type FsPower = Pick<
