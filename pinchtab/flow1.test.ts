@@ -31,6 +31,15 @@ test("create URL must be an allocated create-and-delegate proposal from YMax", (
   assert.throws(
     () =>
       findExpectedCreateUrl(
+        `${UI_URL}/create-portfolio?Compound_Base=50&Aave_Base=50&accountHolder=agoric1delegate&permissions=change-allocations`,
+        UI_URL,
+        1,
+      ),
+    /valid create-and-delegate/,
+  );
+  assert.throws(
+    () =>
+      findExpectedCreateUrl(
         `${UI_URL}/create-portfolio?accountHolder=agoric1delegate&permissions=change-allocations`,
         UI_URL,
       ),
@@ -66,7 +75,7 @@ test("flow 1 requires an explicit deposit within the 30 USDC cap", async () => {
             query: (() => {
               throw Error("deposit validation must precede the agent");
             }) as any,
-            waitForOwner: async () => undefined,
+            ownerFlow: async () => undefined,
           },
         ),
       /no more than 30/,
@@ -74,11 +83,36 @@ test("flow 1 requires an explicit deposit within the 30 USDC cap", async () => {
   }
 });
 
-test("flow 1 prepares, waits for the owner, then redeems in the same session", async () => {
+test("flow 1 requires a bounded integer instrument count", async () => {
+  for (const count of ["0", "1.5", "13", "not-a-number"]) {
+    await assert.rejects(
+      () =>
+        main(
+          {
+            PINCHTAB_TOKEN: "test-token",
+            YMAX_FLOW1_DEPOSIT_USDC: "3",
+            YMAX_FLOW1_MAX_INSTRUMENTS: count,
+          },
+          {
+            fetch: async () => {
+              throw Error("configuration validation must precede ambient I/O");
+            },
+            query: (() => {
+              throw Error("configuration validation must precede the agent");
+            }) as any,
+            ownerFlow: async () => undefined,
+          },
+        ),
+      /integer from 1 through 12/,
+    );
+  }
+});
+
+test("flow 1 automates the wallet flow, then redeems in the same session", async () => {
   const urls: string[] = [];
   const bodies: unknown[] = [];
   const agentCalls: any[] = [];
-  let ownerPrompt = "";
+  let ownerFlowCall: any;
 
   const fetch = async (url: string | URL | Request, init?: RequestInit) => {
     const href = String(url);
@@ -92,15 +126,6 @@ test("flow 1 prepares, waits for the owner, then redeems in the same session", a
       return response({ port: 9870 }, 201);
     }
     if (href.endsWith("/navigate")) return response({ ok: true });
-    if (href.endsWith("/snapshot?filter=interactive")) {
-      return response([
-        { role: "heading", name: "Create Your Portfolio" },
-        { role: "heading", name: "Step 2: Review Your Portfolio" },
-        { role: "heading", name: "Step 3: Deposit USDC" },
-        { role: "spinbutton", name: "0" },
-        { role: "button", name: "Connect Wallet" },
-      ]);
-    }
     throw Error(`unexpected URL: ${href}`);
   };
 
@@ -123,14 +148,16 @@ test("flow 1 prepares, waits for the owner, then redeems in the same session", a
     {
       PINCHTAB_TOKEN: "test-token",
       YMAX_UI_URL: UI_URL,
-      YMAX_FLOW1_DEPOSIT_USDC: "20",
+      YMAX_FLOW1_DEPOSIT_USDC: "3",
+      YMAX_FLOW1_MAX_INSTRUMENTS: "1",
     },
     {
       fetch: fetch as typeof globalThis.fetch,
       query,
-      waitForOwner: async (prompt: string) => {
-        ownerPrompt = prompt;
+      ownerFlow: async (instance, options) => {
+        ownerFlowCall = { instance, options };
       },
+      delay: async () => undefined,
     },
   );
 
@@ -139,23 +166,21 @@ test("flow 1 prepares, waits for the owner, then redeems in the same session", a
     sessionId: "session-1",
   });
   assert.strictEqual(agentCalls.length, 2);
-  assert.match(agentCalls[0].prompt, /20 USDC/);
+  assert.match(agentCalls[0].prompt, /3 USDC/);
+  assert.match(agentCalls[0].prompt, /no more than 1 yield opportunities/);
   assert.doesNotMatch(agentCalls[0].prompt, /generate_delegate_key|propose_create/);
   assert.strictEqual(agentCalls[1].options.resume, "session-1");
   assert.match(agentCalls[1].prompt, /approved/);
-  assert.match(ownerPrompt, /20 USDC/);
+  assert.strictEqual(ownerFlowCall.options.amount, 3);
+  assert.strictEqual(ownerFlowCall.options.uiUrl, UI_URL);
   assert.ok(urls.includes("http://127.0.0.1:9870/navigate"));
   assert.deepStrictEqual(
     bodies.find((body) => (body as { url?: string }).url),
     { url: CREATE_URL },
   );
-  assert.ok(
-    !urls.some((url) => url.endsWith("/action")),
-    "the driver must not click wallet or transaction actions",
-  );
 });
 
-test("flow 1 does not redeem if the owner does not complete the wallet flow", async () => {
+test("flow 1 does not redeem if the automated wallet flow fails", async () => {
   let agentTurns = 0;
   await assert.rejects(
     () =>
@@ -178,14 +203,6 @@ test("flow 1 does not redeem if the owner does not complete the wallet flow", as
               return response({ port: 9870 }, 201);
             }
             if (href.endsWith("/navigate")) return response({ ok: true });
-            if (href.endsWith("/snapshot?filter=interactive")) {
-              return response([
-                { role: "heading", name: "Create Your Portfolio" },
-                { role: "heading", name: "Step 2: Review Your Portfolio" },
-                { role: "heading", name: "Step 3: Deposit USDC" },
-                { role: "spinbutton", name: "0" },
-              ]);
-            }
             throw Error(`unexpected URL: ${href}`);
           }) as typeof globalThis.fetch,
           query: ((input: any) => {
@@ -200,12 +217,12 @@ test("flow 1 does not redeem if the owner does not complete the wallet flow", as
               };
             })();
           }) as any,
-          waitForOwner: async () => {
-            throw Error("owner cancelled");
+          ownerFlow: async () => {
+            throw Error("wallet flow failed");
           },
         },
       ),
-    /owner cancelled/,
+    /wallet flow failed/,
   );
   assert.strictEqual(agentTurns, 1);
 });

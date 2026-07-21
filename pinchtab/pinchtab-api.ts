@@ -49,6 +49,7 @@ export const makePinchTabEndpoint = (
       );
     }
     const instanceUrl = `http://127.0.0.1:${port}`;
+    const debugPort = instance.debugPort || Number(port) + 1;
     const instanceJson = async (path: string, init?: RequestInit) => {
       const url = `${instanceUrl}${path}`;
       const response = await request(url, init);
@@ -66,8 +67,28 @@ export const makePinchTabEndpoint = (
           body: JSON.stringify({ url }),
         });
       },
-      async snapshot() {
-        return instanceJson("/snapshot?filter=interactive", undefined);
+      async snapshot(tabId?: string) {
+        const prefix = tabId ? `/tabs/${tabId}` : "";
+        return instanceJson(`${prefix}/snapshot?filter=interactive`, undefined);
+      },
+      async action(action: JsonRecord, tabId?: string) {
+        const prefix = tabId ? `/tabs/${tabId}` : "";
+        return instanceJson(`${prefix}/action`, {
+          method: "POST",
+          body: JSON.stringify(action),
+        });
+      },
+      async targets() {
+        // Pattern: Extension Target Bridge. PinchTab omits extension popups
+        // from /tabs, so use its instance's adjacent Chromium debug port.
+        const url = `http://127.0.0.1:${debugPort}/json/list`;
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw Error(
+            `Chromium debugging API ${url} failed (${response.status}): ${await response.text()}`,
+          );
+        }
+        return response.json();
       },
       recorder: {
         async startGif() {
@@ -151,8 +172,8 @@ export const makePinchTabEndpoint = (
         method: "POST",
         body: JSON.stringify({
           name,
-          description: "Dedicated YMax Flow 1 recording profile",
-          useWhen: "Use only for operator-supervised YMax recordings",
+          description: "Dedicated funded YMax recording profile",
+          useWhen: "Use only for automated low-value YMax recordings",
         }),
       });
       return makeProfile(created);
@@ -160,6 +181,8 @@ export const makePinchTabEndpoint = (
   };
 };
 
+// Pattern: Inferred Capability Surface. Keep factories authoritative and derive
+// concise public types with ReturnType/Awaited instead of duplicating shapes.
 export type PinchTabEndpoint = ReturnType<typeof makePinchTabEndpoint>;
 export type PinchTabProfile = Awaited<
   ReturnType<PinchTabEndpoint["provideProfile"]>
