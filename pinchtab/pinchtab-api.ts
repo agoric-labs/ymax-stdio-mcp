@@ -1,9 +1,22 @@
 import {
   hasErrorCode,
+  joinTailUnder,
   type ReadableFile,
   type WritableFile,
 } from "./pola-io.ts";
-import { getRecordingFormat } from "./smoke.ts";
+
+export const getRecordingFormat = (format = "mp4") => {
+  switch (format) {
+    case "gif":
+    case "mp4":
+    case "webm":
+      return format;
+    default:
+      throw Error(
+        `Unsupported PINCHTAB_RECORDING_FORMAT=${format}. Use gif, mp4, or webm.`,
+      );
+  }
+};
 
 export const makePinchTabEndpoint = (
   fetch: typeof globalThis.fetch,
@@ -248,6 +261,41 @@ export type PinchTabProfile = Awaited<
 export type PinchTabInstance = Awaited<
   ReturnType<PinchTabProfile["provideInstance"]>
 >;
+
+export const finishRecording = async ({
+  recorder,
+  recordings,
+  delay,
+  attempts = 30,
+}: {
+  recorder: PinchTabInstance["recorder"];
+  recordings: ReadableFile;
+  delay(milliseconds: number): Promise<unknown>;
+  attempts?: number;
+}) => {
+  await recorder.stop();
+  let lastStatus;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    lastStatus = await recorder.status();
+    if (lastStatus.error) {
+      throw Error(`PinchTab recording failed:\n${lastStatus.error}`);
+    }
+    const path = lastStatus.outputPath || lastStatus.path;
+    if (lastStatus.state === "finished" && typeof path === "string") {
+      const file = joinTailUnder({ toString: () => path }, recordings);
+      const stats = await file.stat();
+      if (!stats.isFile() || Number(stats.size) <= 0) {
+        throw Error(`PinchTab did not write a non-empty recording: ${file}`);
+      }
+      return file;
+    }
+    if (attempt + 1 < attempts) await delay(1000);
+  }
+  throw Error(
+    `PinchTab did not finish writing the recording after ${attempts} attempts. Last status:\n${JSON.stringify(lastStatus, null, 2)}`,
+  );
+};
+
 export type JsonRecord = Record<string, any>;
 export const getSnapshotNodes = (snapshot: JsonRecord | JsonRecord[]) =>
   Array.isArray(snapshot) ? snapshot : snapshot.nodes || [];

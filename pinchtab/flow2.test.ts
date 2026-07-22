@@ -1,218 +1,163 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  findExpectedGrantUrl,
-  main,
-  runClaudeAgent,
-} from "./flow2.ts";
+import { EventEmitter } from "node:events";
+import { main } from "./flow2.ts";
 
 const UI_URL = "https://staging-agentic-ui.ymax0-ui.pages.dev";
-const GRANT_URL = `${UI_URL}/grant?accountHolder=agoric1delegate`;
+const RECORDING = "/tmp/profile/.pinchtab-state/recordings/flow2.gif";
+
 const response = (body: unknown, status = 200) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
   });
 
-test("Claude SDK gets its normal tools plus the local MCP server", async () => {
-  let call: any;
-  const output = await runClaudeAgent("A DeFi user request", {
-    cwd: "/repo",
-    env: { PATH: "/bin" },
-    query: ((input: any) => {
-      call = input;
-      return (async function* () {
-        yield {
-          type: "assistant",
-          session_id: "session-2",
-          message: {
-            content: [
-              { type: "tool_use", name: "mcp__ymax-yield-agent__propose_grant" },
-              { type: "text", text: `Prepared: ${GRANT_URL}` },
-            ],
-          },
-        };
-        yield {
-          type: "result",
-          subtype: "success",
-          session_id: "session-2",
-          result: `Prepared: ${GRANT_URL}`,
-        };
-      })();
-    }) as any,
-  });
+const makeFsp = () =>
+  Promise.resolve({
+    stat: async (path: unknown) => {
+      if (String(path) === RECORDING) {
+        return { isFile: () => true, size: 42 } as any;
+      }
+      throw Error(`unexpected stat: ${path}`);
+    },
+  } as any);
 
-  assert.strictEqual(call.prompt, "A DeFi user request");
-  assert.strictEqual(call.options.cwd, "/repo");
-  assert.strictEqual(call.options.strictMcpConfig, true);
-  assert.strictEqual(call.options.persistSession, true);
-  assert.deepStrictEqual(call.options.tools, {
-    type: "preset",
-    preset: "claude_code",
-  });
-  assert.deepStrictEqual(call.options.allowedTools, [
-    "mcp__ymax-yield-agent__*",
-  ]);
-  assert.strictEqual(call.options.permissionMode, "auto");
-  assert.strictEqual(
-    call.options.mcpServers["ymax-yield-agent"].command,
-    "./mcp-server/node_modules/.bin/tsx",
-  );
-  assert.match(output, /Prepared:/);
-});
-
-test("grant URL must come from the configured YMax UI", () => {
-  assert.strictEqual(
-    findExpectedGrantUrl(`Prepared: ${GRANT_URL}`, UI_URL),
-    GRANT_URL,
-  );
-  assert.throws(
-    () =>
-      findExpectedGrantUrl(
-        "https://attacker.example/grant?accountHolder=agoric1delegate",
-        UI_URL,
-      ),
-    /did not return a valid/,
-  );
-});
-
-test("grant URL may be surrounded by Markdown formatting", () => {
-  assert.strictEqual(
-    findExpectedGrantUrl(`Prepared: **${GRANT_URL}**`, UI_URL),
-    GRANT_URL,
-  );
-  assert.strictEqual(
-    findExpectedGrantUrl(`Prepared: [review it](${GRANT_URL})`, UI_URL),
-    GRANT_URL,
-  );
-});
-
-test("flow 2 stops before the Grant delegation MetaMask signature", async () => {
-  const urls: string[] = [];
-  const bodies: unknown[] = [];
-  const fetch = async (url: string | URL | Request, init?: RequestInit) => {
+const makePinchtabFetch = (events: string[], bodies: unknown[]) =>
+  (async (url: string | URL | Request, init?: RequestInit) => {
     const href = String(url);
-    urls.push(href);
     if (init?.body) bodies.push(JSON.parse(String(init.body)));
     if (href.endsWith("/health")) return response({});
     if (href.endsWith("/profiles")) {
-      return response([{ id: "prof_2", name: "ymax-flow1", path: "/tmp/p" }]);
+      return response([
+        { id: "prof_2", name: "ymax-flow2", path: "/tmp/profile" },
+      ]);
     }
     if (href.endsWith("/profiles/prof_2/start")) {
-      return response({ id: "inst_2", port: 9870 }, 201);
+      return response({ id: "inst_2", port: 9870, status: "starting" }, 201);
     }
-    if (href.endsWith("/instances"))
+    if (href.endsWith("/instances")) {
       return response([{ id: "inst_2", port: 9870, status: "running" }]);
-    if (href.endsWith("/navigate")) return response({ ok: true });
-    if (href.endsWith("/snapshot?filter=interactive")) {
-      return response({
-        nodes: [
-          { role: "heading", name: "New agent" },
-          { role: "button", name: "Grant delegation" },
-        ],
-      });
+    }
+    if (href.endsWith("/record/start")) {
+      events.push("record:start");
+      return response({});
+    }
+    if (href.endsWith("/record/stop")) {
+      events.push("record:stop");
+      return response({ path: RECORDING });
+    }
+    if (href.endsWith("/record/status")) {
+      return response({ state: "finished", outputPath: RECORDING });
     }
     throw Error(`unexpected URL: ${href}`);
-  };
+  }) as typeof globalThis.fetch;
+
+const makeClaudeSpawn = (
+  events: string[],
+  { fail, receive = () => undefined }: { fail?: Error; receive?: (prompt: string) => void } = {},
+) =>
+  ((_: string, args: string[]) => {
+    events.push("claude:start");
+    receive(String(args.at(-1)));
+    const child = new EventEmitter();
+    queueMicrotask(() => {
+      if (fail) {
+        child.emit("error", fail);
+      } else {
+        events.push("claude:exit");
+        child.emit("exit", 0, null);
+      }
+    });
+    return child;
+  }) as any;
+
+test("flow 2 records around an operator-driven Claude session", async () => {
+  const events: string[] = [];
+  const bodies: unknown[] = [];
+  const logs: string[] = [];
+  let output = "";
+  let receivedPrompt = "";
+
+  const result = await main(
+    {
+      PINCHTAB_TOKEN: "test-token",
+      PINCHTAB_YMAX_PROFILE: "ymax-flow2",
+      YMAX_UI_URL: UI_URL,
+    },
+    {
+      cwd: "/repo",
+      delay: async () => undefined,
+      fetch: makePinchtabFetch(events, bodies),
+      fspP: makeFsp(),
+      spawn: makeClaudeSpawn(events, {
+        receive: prompt => {
+          receivedPrompt = prompt;
+        },
+      }),
+      log: message => logs.push(message),
+      stdout: {
+        write: (text: string) => {
+          output += text;
+        },
+      } as any,
+    },
+  );
+
+  assert.deepStrictEqual(events, [
+    "record:start",
+    "claude:start",
+    "claude:exit",
+    "record:stop",
+  ]);
+  assert.match(receivedPrompt, /existing YMax portfolio/);
+  assert.match(receivedPrompt, /I'll handle any wallet approvals/);
+  assert.doesNotMatch(receivedPrompt, /generate_delegate_key|clobberActiveDelegate/);
+  assert.match(logs.join("\n"), /\/exit.*stop the recording/s);
+  assert.strictEqual(result, undefined);
+  assert.strictEqual(output, `${RECORDING}\n`);
+  assert.deepStrictEqual(
+    bodies.find(body => (body as { format?: string }).format),
+    { format: "gif", fps: 5, quality: 70, scale: 1 },
+  );
+  assert.deepStrictEqual(
+    bodies.find(body => (body as { securityPolicy?: unknown }).securityPolicy),
+    {
+      headless: false,
+      securityPolicy: {
+        allowedDomains: ["staging-agentic-ui.ymax0-ui.pages.dev"],
+      },
+    },
+  );
+});
+
+test("flow 2 stops recording if interactive Claude fails", async () => {
+  const events: string[] = [];
+  const bodies: unknown[] = [];
 
   await assert.rejects(
     () =>
       main(
         {
           PINCHTAB_TOKEN: "test-token",
+          PINCHTAB_YMAX_PROFILE: "ymax-flow2",
           YMAX_UI_URL: UI_URL,
         },
         {
-          fetch: fetch as typeof globalThis.fetch,
-          query: (({ prompt }: { prompt: string }) => {
-            assert.match(prompt, /existing YMax portfolio/);
-            assert.doesNotMatch(prompt, /generate_delegate_key/);
-            assert.doesNotMatch(prompt, /clobberActiveDelegate/);
-            return (async function* () {
-              yield {
-                type: "result",
-                subtype: "success",
-                session_id: "session-2",
-                result: `Prepared: ${GRANT_URL}`,
-              };
-            })();
-          }) as any,
+          cwd: "/repo",
+          delay: async () => undefined,
+          fetch: makePinchtabFetch(events, bodies),
+          fspP: makeFsp(),
+          spawn: makeClaudeSpawn(events, {
+            fail: Error("Claude exited unexpectedly"),
+          }),
+          log: () => undefined,
         },
       ),
-    {
-      message:
-        "TODO: click Grant delegation and handle the first MetaMask signature",
-    },
+    /Claude exited unexpectedly/,
   );
-
-  assert.ok(urls.includes("http://127.0.0.1:9870/navigate"));
-  assert.deepStrictEqual(
-    bodies.find((body) => (body as { url?: string }).url),
-    { url: GRANT_URL },
-  );
-});
-
-test("flow 2 reports a missing sponsor credential directly", async () => {
-  await assert.rejects(
-    () =>
-      main(
-        { PINCHTAB_TOKEN: "test-token", YMAX_UI_URL: UI_URL },
-        {
-          fetch: async () => {
-            throw Error("PinchTab should not be called after agent failure");
-          },
-          query: (() => (async function* () {
-            yield {
-              type: "result",
-              subtype: "success",
-              session_id: "session-2",
-              result:
-                "generate_delegate_key failed: set SPONSOR_MNEMONIC or SPONSOR_PRIVATE_KEY",
-            };
-          })()) as any,
-        },
-      ),
-    /mcp-server\/\.env/,
-  );
-});
-
-test("flow 2 rejects a profile that is not already connected", async () => {
-  const fetch = async (url: string | URL | Request, init?: RequestInit) => {
-    const href = String(url);
-    if (href.endsWith("/health")) return response({});
-    if (href.endsWith("/profiles")) {
-      return response([{ id: "prof_2", name: "ymax-flow1", path: "/tmp/p" }]);
-    }
-    if (href.endsWith("/profiles/prof_2/start")) {
-      return response({ id: "inst_2", port: 9870 }, 201);
-    }
-    if (href.endsWith("/instances"))
-      return response([{ id: "inst_2", port: 9870, status: "running" }]);
-    if (href.endsWith("/navigate")) return response({ ok: true });
-    if (href.endsWith("/snapshot?filter=interactive")) {
-      return response({
-        nodes: [{ role: "button", name: "Connect Wallet" }],
-      });
-    }
-    throw Error(`unexpected URL: ${href} ${init?.method || "GET"}`);
-  };
-
-  await assert.rejects(
-    () =>
-      main(
-        { PINCHTAB_TOKEN: "test-token", YMAX_UI_URL: UI_URL },
-        {
-          fetch: fetch as typeof globalThis.fetch,
-          query: (() => (async function* () {
-            yield {
-              type: "result",
-              subtype: "success",
-              session_id: "session-2",
-              result: `Prepared: ${GRANT_URL}`,
-            };
-          })()) as any,
-        },
-      ),
-    /wallet is already connected/,
-  );
+  assert.deepStrictEqual(events, [
+    "record:start",
+    "claude:start",
+    "record:stop",
+  ]);
 });

@@ -5,31 +5,17 @@ import { execFile as execFileCb } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
+  finishRecording,
   getPinchtabConfig,
   makePinchTabEndpoint,
-  type PinchTabInstance,
 } from "./pinchtab-api.ts";
 import {
   hasErrorCode,
-  joinTailUnder,
   makeCommand,
   makeFileRW,
   type ReadableFile,
   type WritableFile,
 } from "./pola-io.ts";
-
-export const getRecordingFormat = (format = "mp4") => {
-  switch (format) {
-    case "gif":
-    case "mp4":
-    case "webm":
-      return format;
-    default:
-      throw Error(
-        `Unsupported PINCHTAB_RECORDING_FORMAT=${format}. Use gif, mp4, or webm.`,
-      );
-  }
-};
 
 const assertFileExists = async (file: ReadableFile) => {
   const stats = await file.stat();
@@ -78,41 +64,6 @@ const convertGif = async (
   return convertedFile;
 };
 
-const waitForFinishedRecording = async ({
-  recorder,
-  recordings,
-  delay,
-}: {
-  recorder: PinchTabInstance["recorder"];
-  recordings: ReadableFile;
-  delay(ms: number): Promise<unknown>;
-}) => {
-  let lastStatus;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    lastStatus = await recorder.status();
-    if (lastStatus.error) {
-      throw Error(`PinchTab recording failed:\n${lastStatus.error}`);
-    }
-    const recordingPath = lastStatus.outputPath || lastStatus.path;
-    if (lastStatus.state === "finished" && typeof recordingPath === "string") {
-      const recordingFile = joinTailUnder(
-        { toString: () => recordingPath },
-        recordings,
-      );
-      await assertFileExists(recordingFile);
-      return recordingFile;
-    }
-    await delay(1000);
-  }
-  throw Error(
-    `PinchTab did not finish writing the smoke recording within 30 seconds. Last status:\n${JSON.stringify(
-      lastStatus,
-      null,
-      2,
-    )}`,
-  );
-};
-
 export const main = async (
   env = process.env,
   {
@@ -121,7 +72,8 @@ export const main = async (
     pathP = import("node:path"),
     delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
     execFile = promisify(execFileCb),
-    log = console.log,
+    log = console.error,
+    stdout = process.stdout,
     cwd = process.cwd(),
   } = {},
 ) => {
@@ -162,9 +114,7 @@ export const main = async (
     .join("pinchtab-smoke-snapshot.json")
     .writeText(`${JSON.stringify(snapshot, null, 2)}\n`);
 
-  await instance.recorder.stop();
-
-  const gifFile = await waitForFinishedRecording({
+  const gifFile = await finishRecording({
     recorder: instance.recorder,
     recordings: recordings.readOnly(),
     delay,
@@ -173,10 +123,8 @@ export const main = async (
     log(
       `PinchTab saved the smoke recording at ${gifFile}. No wallet action was attempted.`,
     );
-    return {
-      recordingPath: gifFile.toString(),
-      intermediateGifPath: undefined,
-    };
+    stdout.write(`${gifFile}\n`);
+    return;
   }
 
   const recordingFile = recordings
@@ -187,10 +135,7 @@ export const main = async (
     `PinchTab saved the smoke recording at ${recordingFile}. No wallet action was attempted.`,
   );
   log(`Intermediate GIF retained at ${gifFile}.`);
-  return {
-    recordingPath: recordingFile.toString(),
-    intermediateGifPath: gifFile.toString(),
-  };
+  stdout.write(`${recordingFile}\n`);
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

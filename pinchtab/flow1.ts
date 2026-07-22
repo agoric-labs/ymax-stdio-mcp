@@ -4,31 +4,14 @@
 import { spawn as spawnChild } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import {
+  finishRecording,
   getPinchtabConfig,
   makePinchTabEndpoint,
-  type PinchTabInstance,
 } from "./pinchtab-api.ts";
 import {
-  hasErrorCode,
-  joinTailUnder,
-  makeFileRW,
-  type ReadableFile,
-} from "./pola-io.ts";
-
-const MCP_CONFIG = {
-  mcpServers: {
-    "ymax-yield-agent": {
-      type: "stdio",
-      command: "./mcp-server/node_modules/.bin/tsx",
-      args: ["mcp-server/src/server.ts"],
-    },
-  },
-};
-
-type InteractiveClaude = (
-  prompt: string,
-  options: { cwd: string; env: NodeJS.ProcessEnv },
-) => Promise<void>;
+  launchInteractiveClaude,
+} from "./local-agent.ts";
+import { hasErrorCode, makeFileRW } from "./pola-io.ts";
 
 const getDepositAmount = (env: NodeJS.ProcessEnv) => {
   const text = env.YMAX_FLOW1_DEPOSIT_USDC;
@@ -62,82 +45,6 @@ export const makeInitialPrompt = (amount: number, maxInstruments: number) =>
     "I'll handle any wallet approvals.",
   ].join(" ");
 
-export const makeInteractiveClaudeArgs = (prompt: string) => [
-  "--mcp-config",
-  JSON.stringify(MCP_CONFIG),
-  "--strict-mcp-config",
-  "--dangerously-skip-permissions",
-  "--name",
-  "ymax-flow1",
-  prompt,
-];
-
-const launchInteractiveClaude = (
-  prompt: string,
-  {
-    cwd,
-    env,
-    command = "claude",
-    spawn = spawnChild,
-  }: {
-    cwd: string;
-    env: NodeJS.ProcessEnv;
-    command?: string;
-    spawn?: typeof spawnChild;
-  },
-) =>
-  new Promise<void>((resolve, reject) => {
-    const child = spawn(command, makeInteractiveClaudeArgs(prompt), {
-      cwd,
-      env,
-      stdio: "inherit",
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(
-          Error(
-            `Interactive Claude exited ${signal ? `on ${signal}` : `with status ${code}`}.`,
-          ),
-        );
-      }
-    });
-  });
-
-const assertRecording = async (file: ReadableFile) => {
-  const stats = await file.stat();
-  if (!stats.isFile() || Number(stats.size) <= 0) {
-    throw Error(`PinchTab did not write a non-empty recording: ${file}`);
-  }
-};
-
-const stopAndFindRecording = async (
-  recorder: PinchTabInstance["recorder"],
-  recordings: ReadableFile,
-  delay: (milliseconds: number) => Promise<unknown>,
-) => {
-  await recorder.stop();
-  let lastStatus;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    lastStatus = await recorder.status();
-    if (lastStatus.error) {
-      throw Error(`PinchTab recording failed:\n${lastStatus.error}`);
-    }
-    const path = lastStatus.outputPath || lastStatus.path;
-    if (lastStatus.state === "finished" && typeof path === "string") {
-      const file = joinTailUnder({ toString: () => path }, recordings);
-      await assertRecording(file);
-      return file;
-    }
-    await delay(1000);
-  }
-  throw Error(
-    `PinchTab did not finish writing the Flow 1 recording within 30 seconds. Last status:\n${JSON.stringify(lastStatus, null, 2)}`,
-  );
-};
-
 export const main = async (
   env = process.env,
   {
@@ -147,16 +54,10 @@ export const main = async (
     cwd = process.cwd(),
     delay = (milliseconds: number) =>
       new Promise<void>(resolve => setTimeout(resolve, milliseconds)),
-    interactiveClaude,
-    log = console.log,
-  }: {
-    fetch?: typeof globalThis.fetch;
-    fspP?: Promise<typeof import("node:fs/promises")>;
-    pathP?: Promise<typeof import("node:path")>;
-    cwd?: string;
-    delay?: (milliseconds: number) => Promise<unknown>;
-    interactiveClaude?: InteractiveClaude;
-    log?: (message: string) => void;
+    spawn = spawnChild,
+    claudeCommand = env.YMAX_CLAUDE_BIN || "claude",
+    log = console.error,
+    stdout = process.stdout,
   } = {},
 ) => {
   const amount = getDepositAmount(env);
@@ -213,31 +114,29 @@ export const main = async (
     "Claude is interactive. Use the headed browser for wallet actions. When you are done, type /exit in Claude to stop the recording.",
   );
 
-  const runClaude =
-    interactiveClaude ||
-    ((initialPrompt, options) =>
-      launchInteractiveClaude(initialPrompt, {
-        ...options,
-        command: env.YMAX_CLAUDE_BIN || "claude",
-      }));
-
   let claudeFailure: unknown;
   try {
-    await runClaude(prompt, { cwd, env });
+    await launchInteractiveClaude(prompt, {
+      cwd,
+      env,
+      name: "ymax-flow1",
+      command: claudeCommand,
+      spawn,
+    });
   } catch (error) {
     claudeFailure = error;
   }
 
   log("Flow 1: stopping browser recording...");
-  const recording = await stopAndFindRecording(
-    instance.recorder,
+  const recording = await finishRecording({
+    recorder: instance.recorder,
     recordings,
     delay,
-  );
+  });
   log(`Flow 1: browser recording saved at ${recording}.`);
 
   if (claudeFailure) throw claudeFailure;
-  return { recordingPath: recording.toString() };
+  stdout.write(`${recording}\n`);
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

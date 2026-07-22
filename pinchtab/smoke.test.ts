@@ -105,6 +105,8 @@ test("smoke reuses a running profile and converts gif to webm", async () => {
     throw Error(`unexpected URL: ${href}`);
   };
 
+  const logs: string[] = [];
+  let output = "";
   const result = await main(
     {
       PINCHTAB_TOKEN: "test-token",
@@ -127,13 +129,21 @@ test("smoke reuses a running profile and converts gif to webm", async () => {
         execCalls.push({ file, args });
         return { stdout: "", stderr: "" };
       }) as any,
+      log: message => logs.push(message),
+      stdout: {
+        write: (text: string) => {
+          output += text;
+        },
+      } as any,
     },
   );
 
-  assert.deepStrictEqual(result, {
-    recordingPath: "/tmp/profile/.pinchtab-state/recordings/rec.webm",
-    intermediateGifPath: "/tmp/profile/.pinchtab-state/recordings/rec.gif",
-  });
+  assert.strictEqual(result, undefined);
+  assert.strictEqual(
+    output,
+    "/tmp/profile/.pinchtab-state/recordings/rec.webm\n",
+  );
+  assert.match(logs.join("\n"), /retained.*rec\.gif/is);
   assert.ok(urls.includes("http://127.0.0.1:9867/profiles/prof_1/instance"));
   assert.deepStrictEqual(
     bodies.find((body) => (body as { format?: string }).format),

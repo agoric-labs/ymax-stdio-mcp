@@ -1,12 +1,72 @@
+import type { spawn as Spawn } from "node:child_process";
 import { query as queryClaude } from "@anthropic-ai/claude-agent-sdk";
 
-const MCP_SERVER = {
+const MCP_COMMAND = {
   type: "stdio" as const,
   command: "./mcp-server/node_modules/.bin/tsx",
   args: ["mcp-server/src/server.ts"],
+};
+
+const MCP_SERVER = {
+  ...MCP_COMMAND,
   timeout: 600_000,
   alwaysLoad: true,
 };
+
+const INTERACTIVE_MCP_CONFIG = {
+  mcpServers: { "ymax-yield-agent": MCP_COMMAND },
+};
+
+export type InteractiveClaude = (
+  prompt: string,
+  options: { cwd: string; env: NodeJS.ProcessEnv },
+) => Promise<void>;
+
+const makeInteractiveClaudeArgs = (prompt: string, name: string) => [
+  "--mcp-config",
+  JSON.stringify(INTERACTIVE_MCP_CONFIG),
+  "--strict-mcp-config",
+  "--dangerously-skip-permissions",
+  "--name",
+  name,
+  prompt,
+];
+
+export const launchInteractiveClaude = (
+  prompt: string,
+  {
+    cwd,
+    env,
+    name,
+    command,
+    spawn,
+  }: {
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    name: string;
+    command: string;
+    spawn: typeof Spawn;
+  },
+) =>
+  new Promise<void>((resolve, reject) => {
+    const child = spawn(command, makeInteractiveClaudeArgs(prompt, name), {
+      cwd,
+      env,
+      stdio: "inherit",
+    });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(
+          Error(
+            `Interactive Claude exited ${signal ? `on ${signal}` : `with status ${code}`}.`,
+          ),
+        );
+      }
+    });
+  });
 
 export type AgentQuery = typeof queryClaude;
 

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makeInteractiveClaudeArgs, main } from "./flow1.ts";
+import { EventEmitter } from "node:events";
+import { main } from "./flow1.ts";
 
 const UI_URL = "https://staging-agentic-ui.ymax0-ui.pages.dev";
 const RECORDING = "/tmp/profile/.pinchtab-state/recordings/flow1.gif";
@@ -64,26 +65,24 @@ const makePinchtabFetch = (events: string[], bodies: unknown[]) =>
     };
   })() as typeof globalThis.fetch;
 
-test("interactive Claude keeps normal tools and adds only the YMax MCP config", () => {
-  const prompt = "Create my test portfolio";
-  const args = makeInteractiveClaudeArgs(prompt);
-  const configIndex = args.indexOf("--mcp-config");
-  const config = JSON.parse(args[configIndex + 1]);
-
-  assert.deepStrictEqual(config, {
-    mcpServers: {
-      "ymax-yield-agent": {
-        type: "stdio",
-        command: "./mcp-server/node_modules/.bin/tsx",
-        args: ["mcp-server/src/server.ts"],
-      },
-    },
-  });
-  assert.ok(args.includes("--strict-mcp-config"));
-  assert.ok(args.includes("--dangerously-skip-permissions"));
-  assert.ok(!args.includes("--print"));
-  assert.strictEqual(args.at(-1), prompt);
-});
+const makeClaudeSpawn = (
+  events: string[],
+  { fail, receive = () => undefined }: { fail?: Error; receive?: (prompt: string) => void } = {},
+) =>
+  ((_: string, args: string[]) => {
+    events.push("claude:start");
+    receive(String(args.at(-1)));
+    const child = new EventEmitter();
+    queueMicrotask(() => {
+      if (fail) {
+        child.emit("error", fail);
+      } else {
+        events.push("claude:exit");
+        child.emit("exit", 0, null);
+      }
+    });
+    return child;
+  }) as any;
 
 test("flow 1 requires an explicit deposit within the recording cap", async () => {
   for (const amount of [undefined, "0", "31", "not-a-number"]) {
@@ -130,6 +129,7 @@ test("flow 1 records around an operator-driven Claude session", async () => {
   const events: string[] = [];
   const bodies: unknown[] = [];
   const logs: string[] = [];
+  let output = "";
   let receivedPrompt = "";
 
   const result = await main(
@@ -144,12 +144,17 @@ test("flow 1 records around an operator-driven Claude session", async () => {
       delay: async () => undefined,
       fetch: makePinchtabFetch(events, bodies),
       fspP: makeFsp(),
-      interactiveClaude: async prompt => {
-        events.push("claude:start");
-        receivedPrompt = prompt;
-        events.push("claude:exit");
-      },
+      spawn: makeClaudeSpawn(events, {
+        receive: prompt => {
+          receivedPrompt = prompt;
+        },
+      }),
       log: message => logs.push(message),
+      stdout: {
+        write: (text: string) => {
+          output += text;
+        },
+      } as any,
     },
   );
 
@@ -164,7 +169,8 @@ test("flow 1 records around an operator-driven Claude session", async () => {
   assert.match(receivedPrompt, /no more than 3 yield opportunities/);
   assert.match(receivedPrompt, /only.*Base chain/i);
   assert.match(logs.join("\n"), /\/exit.*stop the recording/s);
-  assert.deepStrictEqual(result, { recordingPath: RECORDING });
+  assert.strictEqual(result, undefined);
+  assert.strictEqual(output, `${RECORDING}\n`);
   assert.deepStrictEqual(
     bodies.find(body => (body as { format?: string }).format),
     { format: "gif", fps: 5, quality: 70, scale: 1 },
@@ -198,10 +204,9 @@ test("flow 1 stops recording if interactive Claude fails", async () => {
           delay: async () => undefined,
           fetch: makePinchtabFetch(events, bodies),
           fspP: makeFsp(),
-          interactiveClaude: async () => {
-            events.push("claude:start");
-            throw Error("Claude exited unexpectedly");
-          },
+          spawn: makeClaudeSpawn(events, {
+            fail: Error("Claude exited unexpectedly"),
+          }),
           log: () => undefined,
         },
       ),
@@ -229,9 +234,9 @@ test("flow 1 refuses existing MCP state before recording or Claude", async () =>
             throw Error("state validation must precede PinchTab");
           },
           fspP: makeFsp({ stateExists: true }),
-          interactiveClaude: async () => {
+          spawn: (() => {
             throw Error("state validation must precede Claude");
-          },
+          }) as any,
         },
       ),
     /blank MCP state.*Remove .*mcp-server\/state\.json/s,

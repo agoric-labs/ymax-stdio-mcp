@@ -1,12 +1,54 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { makePinchTabEndpoint } from "./pinchtab-api.ts";
+import {
+  finishRecording,
+  makePinchTabEndpoint,
+} from "./pinchtab-api.ts";
 
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
   });
+
+test("recording finalization stops, polls, and validates the artifact", async () => {
+  const events: string[] = [];
+  let polls = 0;
+  const recording = {
+    toString: () => "/tmp/profile/recordings/flow.gif",
+    stat: async () => ({ isFile: () => true, size: 42 }),
+  };
+  const recordings = {
+    toString: () => "/tmp/profile/recordings",
+    join: (name: string) => {
+      assert.strictEqual(name, "flow.gif");
+      return recording;
+    },
+  };
+
+  const result = await finishRecording({
+    recorder: {
+      stop: async () => {
+        events.push("stop");
+      },
+      status: async () => {
+        polls += 1;
+        events.push(`poll:${polls}`);
+        return polls === 1
+          ? { state: "encoding" }
+          : {
+              state: "finished",
+              outputPath: "/tmp/profile/recordings/flow.gif",
+            };
+      },
+    } as any,
+    recordings: recordings as any,
+    delay: async () => events.push("delay"),
+  });
+
+  assert.strictEqual(result, recording);
+  assert.deepStrictEqual(events, ["stop", "poll:1", "delay", "poll:2"]);
+});
 
 test("instance addresses extension targets through PinchTab and Chromium", async () => {
   const calls: { url: string; init?: RequestInit }[] = [];

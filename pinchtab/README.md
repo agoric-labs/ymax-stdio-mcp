@@ -17,9 +17,9 @@ not a per-change regression suite. PinchTab drives a dedicated headed browser;
 a local Claude session uses this repository's stdio MCP server; and MetaMask
 in a dedicated profile remains the owner signer.
 
-Flow 1 records a headed browser while the operator works through an interactive
-Claude Code session and performs wallet actions manually. The non-signing smoke
-and Flow 2 script stop before any wallet signature.
+Flows 1 and 2 record a headed browser while the operator works through an
+interactive Claude Code session and performs wallet actions manually. The
+non-signing smoke stops before any wallet signature.
 
 ## Status
 
@@ -27,7 +27,7 @@ and Flow 2 script stop before any wallet signature.
 |---|---|---|
 | Browser/recording smoke | [`smoke.ts`](./smoke.ts) | Navigates, snapshots, and records without interaction |
 | 1. Create a new portfolio | [`flow1.ts`](./flow1.ts) | Operator-driven interactive Claude and headed-browser recording |
-| 2. Add agent to existing portfolio | [`flow2.ts`](./flow2.ts) | Local agent creates a `/grant` proposal; browser stops before `Grant delegation` |
+| 2. Add agent to existing portfolio | [`flow2.ts`](./flow2.ts) | Operator-driven interactive Claude and headed-browser recording |
 | 3–7 | — | Not implemented |
 
 ## Prerequisites
@@ -37,9 +37,9 @@ and Flow 2 script stop before any wallet signature.
   it does not load MetaMask for this harness even when PinchTab passes the
   right flags. The local working binary was
   `/home/connolly/.nix-profile/bin/chromium`.
-- Claude Code authenticated for the local user. Flow 1 launches the interactive
-  CLI; Flow 2 uses the Agent SDK. Both persist native sessions for inspection
-  with tools such as AgentsView.
+- Claude Code authenticated for the local user. Flows 1 and 2 launch the
+  interactive CLI and persist native sessions for inspection with tools such
+  as AgentsView.
 - The MCP server dependencies installed in [`../mcp-server`](../mcp-server), a
   built [`../agoric-sdk`](../agoric-sdk) worktree, and the sponsor environment
   needed by `generate_delegate_key`.
@@ -187,27 +187,18 @@ to an acceptable loss. Run the tests with:
 npm run pinchtab:test
 ```
 
-## Run Flow 2 to the signature boundary
+## Run interactive Flow 2
 
-Flow 2 gives a Claude Agent SDK session access to every tool on this
-repository's stdio MCP server. The user-facing prompt asks Claude to prepare a
-delegation link without naming implementation-level tools. The script validates
-that the returned URL belongs to the configured YMax UI, opens it with PinchTab,
-checks for the `New agent` page and `Grant delegation` action, and then
-intentionally throws:
+Flow 2 starts the dedicated headed PinchTab profile and begins a browser GIF
+recording before launching an interactive Claude Code session. Claude receives
+the existing-portfolio request automatically and has its normal tools plus the
+repository's YMax MCP server. Use the headed browser manually to select the
+portfolio and review wallet actions.
 
-```text
-Error: TODO: click Grant delegation and handle the first MetaMask signature
-```
-
-The script prints the Claude session ID, MCP tool calls, and assistant text as
-they arrive. Claude's native session persistence remains enabled, so AgentsView
-can observe and retain the complete structured session without a PTY recorder.
-Browser navigation begins after Claude returns its grant URL.
-
-Use a dedicated profile whose wallet is already connected and owns an existing
-portfolio. The script rejects a page showing `Connect Wallet`; it does not open
-or automate MetaMask.
+Use a dedicated profile whose wallet owns an existing portfolio. When the flow
+is complete, type `/exit` in Claude. The driver then finalizes the browser
+recording and prints its path. If Claude exits with an error, the driver still
+finalizes the recording before reporting it.
 
 ```sh
 PINCHTAB_YMAX_PROFILE=ymax-flow2 npm run pinchtab:flow2
@@ -216,11 +207,5 @@ PINCHTAB_YMAX_PROFILE=ymax-flow2 npm run pinchtab:flow2
 The stdio MCP server loads `mcp-server/.env` itself; Flow 2 neither reads nor
 preflights the sponsor credential. `generate_delegate_key` may fund and
 provision a new delegate on mainnet, so use only the dedicated low-value sponsor
-described above.
-
-## Remaining Flow 2 boundary
-
-The next Flow 2 increment is operator-supervised MetaMask handling, invitation
-redemption, and post-run reconciliation. All flows retain the same role
-separation: the browser profile owns the portfolio and the local MCP process
-owns only its delegate key.
+described above. The browser profile owns the portfolio and the local MCP
+process owns only its delegate key.
