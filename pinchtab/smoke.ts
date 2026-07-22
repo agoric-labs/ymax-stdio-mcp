@@ -106,7 +106,7 @@ export const main = async (
     .join("pinchtab-smoke-navigation.json")
     .writeText(`${JSON.stringify(navigation, null, 2)}\n`);
 
-  await instance.recorder.startGif();
+  await instance.recorder.startGif(navigation.tabId);
   await delay(3000);
 
   const snapshot = await instance.snapshot();

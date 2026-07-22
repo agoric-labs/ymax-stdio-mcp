@@ -87,7 +87,9 @@ test("smoke reuses a running profile and converts gif to webm", async () => {
       return response("already running", 409);
     if (href.endsWith("/profiles/prof_1/instance"))
       return response({ port: 9870 });
-    if (href.endsWith("/navigate")) return response({ ok: true });
+    if (href.endsWith("/navigate")) {
+      return response({ tabId: "smoke_tab", url: "https://main0.ymax.app" });
+    }
     if (href.endsWith("/record/start")) return response({});
     if (href.endsWith("/snapshot?filter=interactive"))
       return response([{ ref: "e1" }]);
@@ -152,6 +154,7 @@ test("smoke reuses a running profile and converts gif to webm", async () => {
       fps: 5,
       quality: 70,
       scale: 1,
+      tabId: "smoke_tab",
     },
   );
   assert.deepStrictEqual(execCalls, [
@@ -173,6 +176,6 @@ test("smoke reuses a running profile and converts gif to webm", async () => {
   ]);
   assert.match(
     writes["/tmp/artifacts/pinchtab-smoke-navigation.json"],
-    /"ok": true/,
+    /"tabId": "smoke_tab"/,
   );
 });

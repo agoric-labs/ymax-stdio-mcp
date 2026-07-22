@@ -80,9 +80,9 @@ export const main = async (
   const recordings = profile.getRecordingsDir().readOnly();
 
   log(`Flow 2: opening ${uiUrl} in the recording tab...`);
-  await instance.navigate(uiUrl);
+  const navigation = await instance.navigate(uiUrl);
   log("Flow 2: starting browser recording...");
-  await instance.recorder.startGif();
+  await instance.recorder.startGif(navigation.tabId);
 
   const prompt = makeInitialPrompt();
   log(`\nFlow 2 initial prompt:\n\n${prompt}\n`);

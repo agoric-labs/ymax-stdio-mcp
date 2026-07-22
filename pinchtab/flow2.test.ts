@@ -45,7 +45,7 @@ const makePinchtabFetch = (events: string[], bodies: unknown[]) =>
     }
     if (href.endsWith("/navigate")) {
       events.push("navigate");
-      return response({ ok: true });
+      return response({ tabId: "ymax_tab", url: UI_URL });
     }
     if (href.endsWith("/record/start")) {
       events.push("record:start");
@@ -131,7 +131,7 @@ test("flow 2 records around an operator-driven Claude session", async () => {
   );
   assert.deepStrictEqual(
     bodies.find(body => (body as { format?: string }).format),
-    { format: "gif", fps: 5, quality: 70, scale: 1 },
+    { format: "gif", fps: 5, quality: 70, scale: 1, tabId: "ymax_tab" },
   );
   assert.deepStrictEqual(
     bodies.find(body => (body as { securityPolicy?: unknown }).securityPolicy),

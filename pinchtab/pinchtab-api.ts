@@ -111,7 +111,10 @@ export const makePinchTabEndpoint = (
         return response.json();
       },
       recorder: {
-        async startGif() {
+        async startGif(tabId: string) {
+          if (!tabId) {
+            throw Error("PinchTab navigation did not return a recording tab ID.");
+          }
           return instanceJson("/record/start", {
             method: "POST",
             body: JSON.stringify({
@@ -119,6 +122,7 @@ export const makePinchTabEndpoint = (
               fps: 5,
               quality: 70,
               scale: 1,
+              tabId,
             }),
           });
         },
