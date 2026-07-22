@@ -11,7 +11,7 @@ import {
 import {
   launchInteractiveClaude,
 } from "./local-agent.ts";
-import { makeFileRW } from "./pola-io.ts";
+import { hasErrorCode, makeFileRW } from "./pola-io.ts";
 
 export const makeInitialPrompt = () =>
   [
@@ -39,6 +39,26 @@ export const main = async (
   const fsp = await fspP;
   const path = await pathP;
   const files = makeFileRW("/", { fsp, path });
+  const statePath = path.resolve(
+    cwd,
+    env.YMAX_STATE_FILE || "mcp-server/state.json",
+  );
+  const stateExists = await files
+    .join(statePath)
+    .stat()
+    .then(
+      () => true,
+      error => {
+        if (hasErrorCode(error, "ENOENT")) return false;
+        throw error;
+      },
+    );
+  if (stateExists) {
+    throw Error(
+      `Flow 2 requires a blank MCP state. Remove ${statePath} before rerunning Flow 2.`,
+    );
+  }
+
   const config = await getPinchtabConfig(env, files.readOnly());
   const pinchtab = makePinchTabEndpoint(
     fetch,

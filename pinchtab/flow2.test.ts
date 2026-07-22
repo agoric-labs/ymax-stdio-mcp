@@ -12,10 +12,15 @@ const response = (body: unknown, status = 200) =>
     headers: { "Content-Type": "application/json" },
   });
 
-const makeFsp = () =>
+const makeFsp = ({ stateExists = false } = {}) =>
   Promise.resolve({
     stat: async (path: unknown) => {
-      if (String(path) === RECORDING) {
+      const name = String(path);
+      if (name.endsWith("mcp-server/state.json")) {
+        if (stateExists) return {} as any;
+        throw Object.assign(Error("not found"), { code: "ENOENT" });
+      }
+      if (name === RECORDING) {
         return { isFile: () => true, size: 42 } as any;
       }
       throw Error(`unexpected stat: ${path}`);
@@ -160,4 +165,24 @@ test("flow 2 stops recording if interactive Claude fails", async () => {
     "claude:start",
     "record:stop",
   ]);
+});
+
+test("flow 2 refuses existing MCP state before recording or Claude", async () => {
+  await assert.rejects(
+    () =>
+      main(
+        { PINCHTAB_TOKEN: "test-token" },
+        {
+          cwd: "/repo",
+          fetch: async () => {
+            throw Error("state validation must precede PinchTab");
+          },
+          fspP: makeFsp({ stateExists: true }),
+          spawn: (() => {
+            throw Error("state validation must precede Claude");
+          }) as any,
+        },
+      ),
+    /blank MCP state.*Remove .*mcp-server\/state\.json/s,
+  );
 });

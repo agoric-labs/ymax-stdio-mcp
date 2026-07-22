@@ -200,6 +200,10 @@ is complete, type `/exit` in Claude. The driver then finalizes the browser
 recording and prints its path. If Claude exits with an error, the driver still
 finalizes the recording before reporting it.
 
+Flow 2 requires blank MCP state so it provisions a distinct delegate for the
+existing portfolio. If `mcp-server/state.json` exists (or the file selected by
+`YMAX_STATE_FILE` exists), archive or remove it before starting Flow 2.
+
 ```sh
 PINCHTAB_YMAX_PROFILE=ymax-flow2 npm run pinchtab:flow2
 ```
