@@ -266,7 +266,7 @@ export const finishRecording = async ({
   recorder,
   recordings,
   delay,
-  attempts = 30,
+  attempts = 600,
 }: {
   recorder: PinchTabInstance["recorder"];
   recordings: ReadableFile;
