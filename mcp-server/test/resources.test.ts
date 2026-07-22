@@ -16,3 +16,19 @@ test('allocation guidance discovers YDS simulation instead of freezing solver de
     /computeTargetBalances|\$2\.00|effective arc minimum|threshold rules/i,
   );
 });
+
+test('agent guidance uses friendly instrument names in user-facing communication', () => {
+  for (const uri of ['ymax-onboarding', 'ymax-allocation-delegate']) {
+    const guide = RESOURCE_BY_URI[uri].text;
+    assert.match(guide, /friendly instrument names/i);
+    assert.match(guide, /canonical instrument keys/i);
+  }
+});
+
+test('agent guidance implements deterministic parts of reusable strategies', () => {
+  for (const uri of ['ymax-onboarding', 'ymax-allocation-delegate']) {
+    const guide = RESOURCE_BY_URI[uri].text;
+    assert.match(guide, /reusable strategy/i);
+    assert.match(guide, /write code for its deterministic portions/i);
+  }
+});

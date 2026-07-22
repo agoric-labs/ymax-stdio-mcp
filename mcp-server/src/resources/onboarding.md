@@ -2,6 +2,10 @@
 
 YDS is the read API for portfolio and instrument data. Base URL: `https://main0.ymax.app`. The MCP server keeps signing material and signed operations local.
 
+Use friendly instrument names when discussing choices, allocations, and results with the user. Use canonical instrument keys only where tool or API payloads require them, or include a key parenthetically when needed to disambiguate an instrument.
+
+If the user wants a reusable strategy, write code for its deterministic portions, such as calculations, filters, constraints, and allocation rules. Keep judgment-dependent choices explicit rather than burying them in an ad hoc execution transcript.
+
 ## Role Boundaries
 
 - Call `generate_delegate_key`; the server creates, funds, and provisions the delegate wallet.

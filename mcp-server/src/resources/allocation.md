@@ -9,6 +9,14 @@ YDS (YMax Data Service) is the read-only API for portfolio state, instruments, a
 
 Use the OpenAPI spec to discover available endpoints rather than hardcoding paths.
 
+## Instrument Names
+
+Use friendly instrument names when discussing choices, allocations, and results with the user. Use canonical instrument keys only where tool or API payloads require them, or include a key parenthetically when needed to disambiguate an instrument.
+
+## Reusable Strategies
+
+If the user wants a reusable strategy, write code for its deterministic portions, such as calculations, filters, constraints, and allocation rules. Keep judgment-dependent choices explicit rather than burying them in an ad hoc execution transcript.
+
 ## Scope
 
 Your delegated authority is **allocation** (currently the only mandate type; other types may be added). You can call `submit_target_allocation` to adjust instrument weights. The present scope means you CANNOT:
