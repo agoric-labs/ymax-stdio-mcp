@@ -66,6 +66,7 @@ export const makeInteractiveClaudeArgs = (prompt: string) => [
   "--mcp-config",
   JSON.stringify(MCP_CONFIG),
   "--strict-mcp-config",
+  "--dangerously-skip-permissions",
   "--name",
   "ymax-flow1",
   prompt,

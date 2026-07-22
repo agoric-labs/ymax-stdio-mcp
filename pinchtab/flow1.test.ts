@@ -80,6 +80,7 @@ test("interactive Claude keeps normal tools and adds only the YMax MCP config", 
     },
   });
   assert.ok(args.includes("--strict-mcp-config"));
+  assert.ok(args.includes("--dangerously-skip-permissions"));
   assert.ok(!args.includes("--print"));
   assert.strictEqual(args.at(-1), prompt);
 });
