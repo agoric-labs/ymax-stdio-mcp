@@ -79,6 +79,8 @@ export const main = async (
   ]);
   const recordings = profile.getRecordingsDir().readOnly();
 
+  log(`Flow 2: opening ${uiUrl} in the recording tab...`);
+  await instance.navigate(uiUrl);
   log("Flow 2: starting browser recording...");
   await instance.recorder.startGif();
 

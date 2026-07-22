@@ -190,10 +190,13 @@ npm run pinchtab:test
 ## Run interactive Flow 2
 
 Flow 2 starts the dedicated headed PinchTab profile and begins a browser GIF
-recording before launching an interactive Claude Code session. Claude receives
+recording on the YMax UI before launching an interactive Claude Code session. Claude receives
 the existing-portfolio request automatically and has its normal tools plus the
 repository's YMax MCP server. Use the headed browser manually to select the
 portfolio and review wallet actions.
+
+Keep the YMax interaction in that recording tab. PinchTab records one tab, so
+opening the proposal in another tab will not move the recording with it.
 
 Use a dedicated profile whose wallet owns an existing portfolio. When the flow
 is complete, type `/exit` in Claude. The driver then finalizes the browser
