@@ -28,11 +28,10 @@ cp .env.example .env
 | `SPONSOR_MNEMONIC` or `SPONSOR_PRIVATE_KEY` | Yes | Seed for the BLD wallet that funds new delegates |
 | `RPC_URL` | No | Agoric RPC endpoint (defaults to mainnet) |
 | `AGORIC_NET` | No | Agoric network used for vstorage and wallet actions (default `main`) |
-| `SPONSOR_AMOUNT` | No | BLD to send per delegate (default `20000000` = 20 BLD) |
+| `SPONSOR_AMOUNT` | No | `ubld` to send per delegate (default `20000000` = 20 BLD) |
 | `YMAX_UI_URL` | No | YMax UI for proposal links (defaults to the agentic UI preview) |
 | `YDS_URL` | No | YDS endpoint used to register submitted transactions |
-| `CHAIN_ID` | No | Chain identifier sent to YDS (default `agoric-3`) |
-| `YMAX_INSTANCE` | No | YMax instance sent to YDS (default `ymax0`) |
+| `YMAX_STATE_FILE` | No | Delegate state file (defaults to `mcp-server/state.json`) |
 
 ## Start
 
@@ -46,12 +45,15 @@ The server speaks MCP over stdio. Configure your MCP client to launch it with:
 ```json
 {
   "ymax-yield-agent": {
-    "command": "node",
-    "args": ["--import", "tsx", "/path/to/mcp-server/src/server.ts"],
-    "env": { /* or use .env */ }
+    "command": "/path/to/mcp-server/node_modules/.bin/tsx",
+    "args": ["/path/to/mcp-server/src/server.ts"],
+    "env": {}
   }
 }
 ```
+
+The server also loads `mcp-server/.env`, so the `env` object may be empty
+when configuration is kept there.
 
 ## Tools
 
