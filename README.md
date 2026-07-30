@@ -83,7 +83,7 @@ See [mcp-design.md](./mcp-design.md) for the full design rationale.
 
 ## Experience Reports
 
-Lessons learned from live mainnet operation — see [experience-reports.md](./experience-reports.md).
+Lessons learned from live mainnet operation — see [experience-reports.md](./test-notes/experience-reports.md).
 
 ## Seven-flow harness
 
