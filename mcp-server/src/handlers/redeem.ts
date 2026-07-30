@@ -11,8 +11,11 @@ import {
   getPortfolioMandateDetails,
 } from '../invitation.ts';
 import { defaultStateStore, type StateStore } from '../state.ts';
-import { toolError } from '../responses.ts';
+import { attemptRegistration } from '../registration.ts';
+import { registrationOutcome, toolError } from '../responses.ts';
 import type { ToolResponse } from '../types.ts';
+
+const YMAX_INSTANCE = 'ymax0';
 
 const delay = (ms: number): Promise<void> =>
   new Promise(r => setTimeout(r, ms));
@@ -46,9 +49,9 @@ export async function handleRedeem(
   });
   const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
 
-  const ymaxInstance = walletKit.agoricNames.instance['ymax0'];
+  const ymaxInstance = walletKit.agoricNames.instance[YMAX_INSTANCE];
   if (!ymaxInstance) {
-    return toolError('contract ymax0 not found in agoricNames');
+    return toolError(`contract ${YMAX_INSTANCE} not found in agoricNames`);
   }
 
   let invitation;
@@ -109,19 +112,28 @@ export async function handleRedeem(
     delegationKeyName,
   });
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify({
-          status: 'redeemed',
-          delegationKey: delegationKeyName,
-          redeemTx: result.tx.transactionHash,
-          portfolioId,
-          agentId,
-          permissions,
-        }),
-      },
-    ],
-  };
+  const registration = await attemptRegistration(
+    {
+      txHash: result.tx.transactionHash,
+      chain: networkConfig.chainName,
+      ymaxInstance: YMAX_INSTANCE,
+    },
+    {
+      env: options.env,
+      fetch,
+    },
+  );
+
+  return registrationOutcome(
+    'redeemed',
+    {
+      delegationKey: delegationKeyName,
+      redeemTx: result.tx.transactionHash,
+      portfolioId,
+      agentId,
+      permissions,
+    },
+    registration,
+    'Invitation redemption',
+  );
 }

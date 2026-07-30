@@ -10,9 +10,11 @@ import {
   hasPortfolioId,
   type StateStore,
 } from '../state.ts';
-import { registerTransaction } from '../registration.ts';
-import { toolError } from '../responses.ts';
+import { attemptRegistration } from '../registration.ts';
+import { registrationOutcome, toolError } from '../responses.ts';
 import type { AllocationMap, ToolResponse } from '../types.ts';
+
+const YMAX_INSTANCE = 'ymax0';
 
 const delay = (ms: number): Promise<void> =>
   new Promise(r => setTimeout(r, ms));
@@ -81,7 +83,7 @@ export async function handleSubmitAllocation(
   });
 
   const status = (await walletKit.readPublished(
-    `ymax0.portfolios.portfolio${activeDelegate.portfolioId}`,
+    `${YMAX_INSTANCE}.portfolios.portfolio${activeDelegate.portfolioId}`,
   )) as { policyVersion: number; rebalanceCount: number };
 
   const syncState = {
@@ -115,26 +117,25 @@ export async function handleSubmitAllocation(
     );
   }
 
-  await registerTransaction({
-    txHash: result.tx.transactionHash,
-    portfolioId: activeDelegate.portfolioId,
-  }, {
-    env: options.env,
-    fetch,
-  }).catch((err: Error) =>
-    console.error('tx registration failed (non-fatal):', err.message),
+  const registration = await attemptRegistration(
+    {
+      txHash: result.tx.transactionHash,
+      chain: networkConfig.chainName,
+      ymaxInstance: YMAX_INSTANCE,
+    },
+    {
+      env: options.env,
+      fetch,
+    },
   );
 
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify({
-          status: 'submitted',
-          txHash: result.tx.transactionHash,
-          policyVersion: syncState.policyVersion,
-        }),
-      },
-    ],
-  };
+  return registrationOutcome(
+    'submitted',
+    {
+      txHash: result.tx.transactionHash,
+      policyVersion: syncState.policyVersion,
+    },
+    registration,
+    'setTargetAllocation',
+  );
 }
