@@ -3,7 +3,6 @@
 .obsidian/
 .opencode/
 node_modules
-agoric-sdk/
 mcp-server/state.json
 mcp-server/state.json.tmp
 artifacts/

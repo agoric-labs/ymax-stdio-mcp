@@ -14,9 +14,8 @@
     "baseUrl": ".",
     "paths": {
       "@agoric/zoe": ["node_modules/@agoric/zoe"],
-      "@agoric/zoe/*": ["../agoric-sdk/packages/zoe/*"]
+      "@agoric/zoe/*": ["node_modules/@agoric/zoe/*"]
     }
   },
-  "include": ["src"],
-  "exclude": ["../agoric-sdk"]
+  "include": ["src"]
 }

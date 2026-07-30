@@ -53,10 +53,10 @@ No arguments
 ```
 
 **Implementation notes:**
-- Runs `agoric-keygen.ts` from `agoric-sdk/packages/portfolio-deploy/scripts/`
+- Generates a 24-word mnemonic and Agoric account with CosmJS
 - Stores the generated mnemonic in MCP server state (not on disk as a shareable file)
 - Sends ~20 BLD from the sponsor wallet to the new delegate address
-- Provisions the smart wallet via `MsgProvision` (see [onboarding report §Funding And The Provisioning Hiccup](./ymax-agent-onboarding-experience-report.md#funding-and-the-provisioning-hiccup))
+- Encodes and broadcasts `MsgProvision` directly with CosmJS; no `agd` subprocess is used (see [onboarding report §Funding And The Provisioning Hiccup](./ymax-agent-onboarding-experience-report.md#funding-and-the-provisioning-hiccup))
 - Provisioning **must** happen before the grant is requested ([onboarding report §What I Would Do Differently Next Time](./ymax-agent-onboarding-experience-report.md#what-i-would-do-differently-next-time))
 - Returns address the user gives to the YMax grant UI
 
@@ -98,7 +98,8 @@ No arguments
 - Redeems using the stored mnemonic via `wallet-store.ts` `executeOffer` pattern (see [onboarding report §Grant Retry And Redemption](./ymax-agent-onboarding-experience-report.md#grant-retry-and-redemption))
 - Saves result as `delegate-portfolio{NN}` with `overwrite: true`
 - Saves `{ portfolioId, delegationKeyName }` in MCP server state
-- The `delegate-portfolio{NN}` naming convention is required by `delegated-set-target-allocation.ts` ([skill reference](./agoric-sdk/packages/portfolio-deploy/skills/ymax-agoric-allocation-delegate/references/set-target-allocation.md))
+- Saves the invitation result as `delegate-portfolio{NN}` and records that key
+  name in server state for subsequent allocation submissions
 
 **Errors:**
 - No invitation found after timeout → `"no portfolioMandate invitation detected — has the grant been completed?"`
@@ -142,7 +143,6 @@ Submits a `setTargetAllocation` transaction signed by the stored delegation key.
 {
   "status": "submitted",
   "txHash": "72398D16F5214D91E58D8FCF025B9ABAF649F6CC4191562D1F9C4DB97DA2EAA0",
-  "flowKey": "flow6",
   "policyVersion": 6
 }
 ```
@@ -151,7 +151,10 @@ Submits a `setTargetAllocation` transaction signed by the stored delegation key.
 - Calls `setTargetAllocation` by importing the delegation and wallet-store helpers directly as modules — no CLI subprocess
 - Passes allocations as a single `{ targetAllocation, syncState }` struct — two positional args collapse through the marshal layer and cause `"Must have missing properties"` ([target allocation report Finding #2](./experience-report-target-allocation.md#2-settargetallocation-args-collapse-through-the-marshal-layer))
 - Resolves delegation key as `delegate-portfolio{NN}` from server state
-- After the on-chain tx confirms, auto-registers via `POST /transactions` with the portfolio ID and flow key
+- After the on-chain tx confirms, auto-registers via `POST /transactions` with
+  the transaction hash and portfolio ID
+- Does not report or register a flow key: the published invocation result
+  contains only the return value's pass-style, not the return value itself
 - Registration is necessary because delegated submissions do not appear on the YMax activity page ([target allocation report Finding #4](./experience-report-target-allocation.md#4-activity-page-never-reflects-delegated-submissions), [iterative tweaks report Finding #6](./experience-report-iterative-allocation-tweaks.md#6-activity-page-still-doesnt-reflect-delegated-submissions))
 
 **Errors:**
@@ -176,7 +179,9 @@ Correct ordering derived from the onboarding report's painful lesson (grant-befo
 
 ## Operator Prerequisites
 
-The MCP server imports from `@agoric/client-utils` and `@aglocal/portfolio-contract`, which the agoric-sdk provides. The operator must build the SDK once via `nix develop` so its packages are available as dependencies. At runtime the server is a plain Node.js process — no nix involved. See [iterative tweaks report Finding #4](./experience-report-iterative-allocation-tweaks.md#4-nix-develop-is-required-for-the-toolchain) for the original CLI pattern that this design replaces.
+The MCP server installs pinned npm dev releases of its Agoric dependencies.
+All pinned packages must come from the same SDK commit. No `agoric-sdk`
+checkout, Nix environment, or `agd` binary is required.
 
 ---
 
@@ -204,10 +209,13 @@ mcp-server/
 
 Each handler file defines its own `description` and `inputSchema` in the MCP tool registration — the spec lives in code, not in a separate doc. This `mcp-design.md` captures the rationale and design decisions that don't belong in the tool schemas.
 
-The server depends on packages from the agoric-sdk worktree for:
-- `@agoric/client-utils` — wallet-store proxy, bridge message serialization
-- `@aglocal/portfolio-contract` — delegation helpers, offer shapes
-- `@agoric/cosmic-proto` — `MsgProvision` protobuf encoding
+The server installs npm dev releases of:
+- `@agoric/client-utils` — wallet-store proxy and bridge message serialization
+- `@agoric/cosmic-proto`, `@agoric/internal`, and `@agoric/portfolio-api` —
+  supporting Agoric protocol APIs required by the client utilities
+
+Delegate key generation, sponsor transfers, and `MsgProvision` submission use
+CosmJS directly. The server does not invoke Agoric SDK command-line tools.
 
 ## Design Decisions
 
@@ -216,7 +224,7 @@ The server depends on packages from the agoric-sdk worktree for:
 | Mnemonic stays in MCP | Never expose the signing key to the LLM context | Onboarding report: "never paste mnemonic into chat" |
 | Single local session | Keeps key material behind the MCP process boundary | Local single-user deployment |
 | Single-struct args for `setTargetAllocation` | Two positional args collapse through marshal layer | Target allocation report Finding #2 |
-| Auto-derive `delegate-portfolio{NN}` | Convention required by `delegated-set-target-allocation.ts` | Both skill docs, all three delegation reports |
+| Auto-derive `delegate-portfolio{NN}` | Gives each saved mandate a stable portfolio-specific wallet-store key | Invitation details and server state |
 | Derive portfolio ID from invitation | Avoids user input and binds the saved capability to its actual portfolio | `portfolioMandate` custom details |
 | Agent address vs delegate address | The agent address is derived from the mnemonic; the delegate address receives the grant | Delegate address is used for the grant link |
 | Poll for invitation after grant | The invitation may not be available immediately after provisioning | Onboarding report: user retried grant after provisioning |

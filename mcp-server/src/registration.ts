@@ -9,19 +9,16 @@ export async function registerTransaction(
   params: {
     txHash: string;
     portfolioId: number;
-    flowKey?: string;
   },
   options: RegistrationOptions,
 ): Promise<{ success: boolean }> {
-  const { txHash, portfolioId, flowKey } = params;
+  const { txHash, portfolioId } = params;
   const ydsUrl = options.env.YDS_URL || DEFAULT_YDS_URL;
 
   const body: Record<string, unknown> = {
     txHash,
     portfolioId,
   };
-  if (flowKey) body.flowKey = flowKey;
-
   const response = await options.fetch(`${ydsUrl}/transactions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

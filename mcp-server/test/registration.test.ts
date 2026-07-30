@@ -50,7 +50,7 @@ test('registerTransaction sends txHash and portfolioId in body', async () => {
   assert.strictEqual(parsed.flowKey, undefined);
 });
 
-test('registerTransaction includes flowKey when provided', async () => {
+test('registerTransaction does not publish an unavailable flowKey', async () => {
   const bodies: string[] = [];
   const fetchMock = async (_url: string, requestOptions: RequestInit) => {
     bodies.push(requestOptions.body as string);
@@ -62,12 +62,12 @@ test('registerTransaction includes flowKey when provided', async () => {
       txHash: 'ABC123',
       portfolioId: 84,
       flowKey: 'flow6',
-    },
+    } as any,
     options(fetchMock as typeof fetch),
   );
 
   const parsed = JSON.parse(bodies[0]);
-  assert.strictEqual(parsed.flowKey, 'flow6');
+  assert.strictEqual(parsed.flowKey, undefined);
 });
 
 test('registerTransaction returns success on 200', async () => {

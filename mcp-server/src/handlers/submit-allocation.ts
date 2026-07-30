@@ -101,7 +101,6 @@ export async function handleSubmitAllocation(
     }) => Promise<{
       id?: string;
       tx: { code: number; rawLog?: string; transactionHash: string };
-      invocationResult?: unknown;
     }>;
   }>(activeDelegate.delegationKeyName);
 
@@ -116,13 +115,9 @@ export async function handleSubmitAllocation(
     );
   }
 
-  const flowKey = result.invocationResult
-    ? String(result.invocationResult)
-    : undefined;
   await registerTransaction({
     txHash: result.tx.transactionHash,
     portfolioId: activeDelegate.portfolioId,
-    flowKey,
   }, {
     env: options.env,
     fetch,
@@ -137,7 +132,6 @@ export async function handleSubmitAllocation(
         text: JSON.stringify({
           status: 'submitted',
           txHash: result.tx.transactionHash,
-          flowKey,
           policyVersion: syncState.policyVersion,
         }),
       },

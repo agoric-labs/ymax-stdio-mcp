@@ -45,7 +45,10 @@ export function findPortfolioMandateInvitation(currentWalletRecord: {
       if (!candidate || candidate.description !== 'portfolioMandate') {
         continue;
       }
-      return candidate as PortfolioMandateInvitation;
+      return {
+        ...candidate,
+        description: 'portfolioMandate',
+      };
     }
   }
 

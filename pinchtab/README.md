@@ -40,9 +40,8 @@ non-signing smoke stops before any wallet signature.
 - Claude Code authenticated for the local user. Flows 1 and 2 launch the
   interactive CLI and persist native sessions for inspection with tools such
   as AgentsView.
-- The MCP server dependencies installed in [`../mcp-server`](../mcp-server), a
-  built [`../agoric-sdk`](../agoric-sdk) worktree, and the sponsor environment
-  needed by `generate_delegate_key`.
+- The MCP server dependencies installed in [`../mcp-server`](../mcp-server)
+  and the sponsor environment needed by `generate_delegate_key`.
 - A PinchTab server bound to `127.0.0.1`, with its generated bearer token kept
   outside this repository.
 - An unpacked wallet extension placed in the PinchTab extensions directory, or

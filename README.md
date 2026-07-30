@@ -5,7 +5,6 @@ MCP server for a delegated YMax allocation agent on Agoric mainnet. It builds ow
 ## Prerequisites
 
 - Node.js 22.18+ (native TypeScript type stripping)
-- A built Agoric SDK worktree at `./agoric-sdk/` (see [CONTRIBUTING.md](./CONTRIBUTING.md))
 - A funded sponsor BLD wallet for delegate key creation
 
 ## Install
