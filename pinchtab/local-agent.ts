@@ -3,7 +3,7 @@ import { query as queryClaude } from "@anthropic-ai/claude-agent-sdk";
 
 const MCP_COMMAND = {
   type: "stdio" as const,
-  command: "./mcp-server/node_modules/.bin/tsx",
+  command: "node",
   args: ["mcp-server/src/server.ts"],
 };
 

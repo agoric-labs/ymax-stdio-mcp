@@ -4,7 +4,7 @@ MCP server for a delegated YMax allocation agent on Agoric mainnet. It builds ow
 
 ## Prerequisites
 
-- Node.js 22+
+- Node.js 22.18+ (native TypeScript type stripping)
 - A built Agoric SDK worktree at `./agoric-sdk/` (see [CONTRIBUTING.md](./CONTRIBUTING.md))
 - A funded sponsor BLD wallet for delegate key creation
 
@@ -45,7 +45,7 @@ The server speaks MCP over stdio. Configure your MCP client to launch it with:
 ```json
 {
   "ymax-yield-agent": {
-    "command": "/path/to/mcp-server/node_modules/.bin/tsx",
+    "command": "node",
     "args": ["/path/to/mcp-server/src/server.ts"],
     "env": {}
   }

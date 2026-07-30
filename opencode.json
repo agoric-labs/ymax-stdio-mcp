@@ -6,7 +6,7 @@
   "mcp": {
     "ymax-yield-agent": {
       "type": "local",
-      "command": ["npx", "tsx", "mcp-server/src/server.ts"],
+      "command": ["node", "mcp-server/src/server.ts"],
       "enabled": true,
       "env": {
         "SPONSOR_MNEMONIC": "{env:SPONSOR_MNEMONIC}",
