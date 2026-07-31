@@ -7,6 +7,34 @@ export const toolError = (message: string): ToolResponse => ({
 });
 
 /**
+ * Report a transaction that was broadcast and charged gas but whose action the
+ * contract refused — an out-of-mandate allocation, for instance.
+ *
+ * The transaction hash is reported so the attempt stays traceable, and the
+ * registration outcome travels with it: a rejected transaction is still real
+ * chain activity and belongs on the activity page.
+ */
+export const submissionRejected = (
+  payload: Record<string, unknown>,
+  registration: Registration,
+): ToolResponse => ({
+  content: [
+    {
+      type: 'text',
+      text: JSON.stringify({
+        status: 'rejected',
+        ...payload,
+        registered: registration.registered,
+        ...(registration.registered
+          ? {}
+          : { registrationError: registration.registrationError }),
+      }),
+    },
+  ],
+  isError: true,
+});
+
+/**
  * Report the outcome of a transaction that succeeded on-chain, alongside
  * whether YDS registration for activity-page visibility also succeeded.
  *
