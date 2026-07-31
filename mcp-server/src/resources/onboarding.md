@@ -1,6 +1,8 @@
 # YMax Agent Onboarding
 
-YDS is the read API for portfolio and instrument data. Base URL: `https://main0.ymax.app`. The MCP server keeps signing material and signed operations local.
+YDS is the read API for portfolio and instrument data. Base URL for beta: `https://main0.ymax.app`.
+
+The MCP server keeps signing material and signed operations local.
 
 Use friendly instrument names when discussing choices, allocations, and results with the user. Use canonical instrument keys only where tool or API payloads require them, or include a key parenthetically when needed to disambiguate an instrument.
 
@@ -10,8 +12,8 @@ If the user wants a reusable strategy, write code for its deterministic portions
 
 - Call `generate_delegate_key`; the server creates, funds, and provisions the delegate wallet.
 - Never ask the user for a mnemonic or private key.
-- The MCP server stores the active delegate locally. Later tools use that active delegate without an extra bearer token.
-- Propose allocations through UI links. The user approves portfolio creation, funding, delegation, and owner edits in YMax.
+- The MCP server stores the active delegate locally. Later tools use that active delegate.
+- For portfolio creation, funding, delegation, and owner edits, propose through UI links. The user approves in YMax.
 - Never create the portfolio yourself; only the user can do that on `main0.ymax.app`.
 - Use `submit_target_allocation` only after the delegation invitation has been redeemed.
 
@@ -21,8 +23,8 @@ If the user wants a reusable strategy, write code for its deterministic portions
 - `propose_create` combines allocation prefill and the delegate address so creation and delegation take one trip through the UI.
 - `propose_grant` preserves the standalone path for delegating an existing portfolio.
 - The delivered `portfolioMandate` invitation contains `portfolioId`, `agentId`, and `permissions`; `redeem_invitation` derives the binding from those details.
-- Delegated allocation authority applies to the portfolio's current instrument key set. When the owner includes instruments in an approved edit, they become part of the effective mandate.
 - Redeeming saves the capability as `delegate-portfolio{NN}`.
+- Delegated allocation authority applies to the current instrument key set in the portfolio's target allocation. When the owner includes instruments in an approved edit, they become part of the effective mandate.
 
 ## Run Order
 
@@ -31,9 +33,9 @@ If the user wants a reusable strategy, write code for its deterministic portions
 3. Call `propose_create` with the proposed allocation map.
 4. Give the returned link to the user. They create, fund, and delegate in one UI flow.
 5. Call `redeem_invitation`; do not ask the user for a portfolio number.
-6. Verify that the response contains the expected portfolio, agent, and `{ "allocation": true }` permission.
+6. Verify that the response contains a portfolio id, agent, and `{ "allocation": true }` permission.
 7. Use `submit_target_allocation` for autonomous changes.
-8. Use `propose_edit` when the user should approve an allocation or instrument-set change.
+8. Use `propose_edit` when the user should approve an instrument-set change.
 
 For an existing portfolio, replace steps 3-4 with `propose_grant` and have the user complete the returned Grant link. Then continue with `redeem_invitation`; its invitation details identify the portfolio.
 
@@ -59,7 +61,7 @@ Existing-portfolio grant:
 {YMAX_UI_URL}/grant?accountHolder={delegateAddress}
 ```
 
-The default UI is the `Agoric/ymax-web#840` branch preview. Configure `YMAX_UI_URL` when targeting another deployment.
+The default UI for this agentic demo is `https://staging-agentic-ui.ymax0-ui.pages.dev/` (the `Agoric/ymax-web#840` branch preview). Configure `YMAX_UI_URL` when targeting another deployment.
 
 ## Failure Triage
 
@@ -69,7 +71,7 @@ The default UI is the `Agoric/ymax-web#840` branch preview. Configure `YMAX_UI_U
 | Invitation not arriving | UI flow is incomplete or ran before provisioning | Complete or retry the combined UI flow |
 | Invalid invitation details | The delivered invitation is not the expected contract version | Inspect its `customDetails` and deployment versions |
 | Wallet not funded | Sponsor balance is insufficient or RPC is unavailable | Fund the sponsor or check `RPC_URL` |
-| Delegated allocation rejects an instrument set | Proposal keys differ from the portfolio's current keys | Re-read the portfolio or ask the owner to approve an edit |
+| Delegated allocation rejects an instrument set | Proposal keys differ from the portfolio's current target allocation keys | Re-read the portfolio or ask the owner to approve an edit |
 
 ## Completion Report
 
