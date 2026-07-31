@@ -1,5 +1,6 @@
 import {
   fetchEnvNetworkConfig,
+  getInvocationUpdate,
   makeSmartWalletKit,
   makeSigningSmartWalletKit,
   reflectWalletStore,
@@ -11,7 +12,11 @@ import {
   type StateStore,
 } from '../state.ts';
 import { attemptRegistration } from '../registration.ts';
-import { registrationOutcome, toolError } from '../responses.ts';
+import {
+  registrationOutcome,
+  submissionRejected,
+  toolError,
+} from '../responses.ts';
 import type { AllocationMap, ToolResponse } from '../types.ts';
 
 const YMAX_INSTANCE = 'ymax0';
@@ -75,11 +80,17 @@ export async function handleSubmitAllocation(
     activeDelegate.mnemonic,
   );
 
+  // sendOnly returns as soon as the transaction is broadcast. Without it,
+  // reflectWalletStore awaits the invocation result internally and throws on a
+  // contract rejection, discarding { id, tx } — so a rejected allocation would
+  // leave no transaction hash to report or register. We await the verdict below
+  // instead, keeping the hash either way.
   const store = reflectWalletStore(ssk, {
     setTimeout: options.setTimeout,
     log: (...args: unknown[]) => console.error('-- wallet-store:', ...args),
     makeNonce: () => options.now().toISOString(),
     fee: makeFee(),
+    sendOnly: true,
   });
 
   const status = (await walletKit.readPublished(
@@ -110,16 +121,13 @@ export async function handleSubmitAllocation(
     targetAllocation,
     syncState,
   });
+  const txHash = result.tx.transactionHash;
 
-  if (result.tx.code !== 0) {
-    return toolError(
-      `invokeEntry failed (${result.tx.code}): ${result.tx.rawLog}`,
-    );
-  }
-
+  // Register before knowing the verdict. A rejected allocation is still a
+  // broadcast, gas-charged transaction, and it belongs on the activity page.
   const registration = await attemptRegistration(
     {
-      txHash: result.tx.transactionHash,
+      txHash,
       chain: networkConfig.chainName,
       ymaxInstance: YMAX_INSTANCE,
     },
@@ -129,12 +137,37 @@ export async function handleSubmitAllocation(
     },
   );
 
+  if (result.tx.code !== 0) {
+    return submissionRejected(
+      {
+        txHash,
+        policyVersion: syncState.policyVersion,
+        error: `invokeEntry failed (${result.tx.code}): ${result.tx.rawLog}`,
+      },
+      registration,
+    );
+  }
+
+  // The contract reports an out-of-mandate allocation here, not in the tx code.
+  const invocationError = result.id
+    ? await getInvocationUpdate(result.id, ssk.query.getLastUpdate, {
+        setTimeout: options.setTimeout,
+      }).then(
+        () => undefined,
+        (err: Error) => err.message,
+      )
+    : undefined;
+
+  if (invocationError) {
+    return submissionRejected(
+      { txHash, policyVersion: syncState.policyVersion, error: invocationError },
+      registration,
+    );
+  }
+
   return registrationOutcome(
     'submitted',
-    {
-      txHash: result.tx.transactionHash,
-      policyVersion: syncState.policyVersion,
-    },
+    { txHash, policyVersion: syncState.policyVersion },
     registration,
     'setTargetAllocation',
   );
