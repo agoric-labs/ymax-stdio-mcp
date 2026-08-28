@@ -139,7 +139,6 @@ test("flow 1 records around an operator-driven Claude session", async () => {
   const result = await main(
     {
       PINCHTAB_TOKEN: "test-token",
-      YMAX_UI_URL: UI_URL,
       YMAX_FLOW1_DEPOSIT_USDC: "9",
       YMAX_FLOW1_MAX_INSTRUMENTS: "3",
     },

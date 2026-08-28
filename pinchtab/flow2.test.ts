@@ -91,7 +91,6 @@ test("flow 2 records around an operator-driven Claude session", async () => {
     {
       PINCHTAB_TOKEN: "test-token",
       PINCHTAB_YMAX_PROFILE: "ymax-flow2",
-      YMAX_UI_URL: UI_URL,
     },
     {
       cwd: "/repo",
