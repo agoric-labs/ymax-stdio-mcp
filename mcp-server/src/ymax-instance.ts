@@ -2,8 +2,10 @@ export type YmaxInstance = 'ymax0' | 'ymax1';
 
 export const DEFAULT_YMAX_INSTANCE: YmaxInstance = 'ymax1';
 
-const DEFAULT_YMAX_UI_URL =
-  'https://staging-agentic-ui.ymax0-ui.pages.dev';
+const DEFAULT_UI_URLS: Record<YmaxInstance, string> = {
+  ymax0: 'https://staging-agentic-ui.ymax0-ui.pages.dev',
+  ymax1: 'https://staging-agentic-ui.ymax1-ui.pages.dev',
+};
 
 const DEFAULT_YDS_URLS: Record<YmaxInstance, string> = {
   ymax0: 'https://main0.ymax.app',
@@ -22,8 +24,9 @@ export const getDelegateYmaxInstance = (
 ): YmaxInstance => delegate.ymaxInstance ?? 'ymax0';
 
 export const getYmaxUiUrl = (
+  instance: YmaxInstance,
   override: string | undefined,
-): string => override || DEFAULT_YMAX_UI_URL;
+): string => override || DEFAULT_UI_URLS[instance];
 
 export const getYdsUrl = (
   instance: YmaxInstance,

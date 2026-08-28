@@ -28,7 +28,7 @@ cp .env.example .env
 | `RPC_URL` | No | Agoric RPC endpoint (defaults to mainnet) |
 | `AGORIC_NET` | No | Agoric network used for vstorage and wallet actions (default `main`) |
 | `SPONSOR_AMOUNT` | No | `ubld` to send per delegate (default `20000000` = 20 BLD) |
-| `YMAX_UI_URL` | No | Override the YMax UI used for proposal links (defaults to the staging agentic UI) |
+| `YMAX_UI_URL` | No | Override the YMax UI used for proposal links (defaults to the selected instance's staging agentic UI) |
 | `YDS_URL` | No | Override the YDS endpoint used to register transactions (otherwise selected by instance) |
 | `YMAX_STATE_FILE` | No | Delegate state file (defaults to `mcp-server/state.json`) |
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { main } from "./flow2.ts";
 
-const UI_URL = "https://staging-agentic-ui.ymax0-ui.pages.dev";
+const UI_URL = "https://staging-agentic-ui.ymax1-ui.pages.dev";
 const RECORDING = "/tmp/profile/.pinchtab-state/recordings/flow2.gif";
 
 const response = (body: unknown, status = 200) =>
@@ -137,7 +137,7 @@ test("flow 2 records around an operator-driven Claude session", async () => {
     {
       headless: false,
       securityPolicy: {
-        allowedDomains: ["staging-agentic-ui.ymax0-ui.pages.dev"],
+        allowedDomains: ["staging-agentic-ui.ymax1-ui.pages.dev"],
       },
     },
   );

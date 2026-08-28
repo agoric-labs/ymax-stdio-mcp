@@ -25,10 +25,14 @@ test('legacy delegates remain bound to ymax0', () => {
   );
 });
 
-test('the UI stays on the staging agentic deployment', () => {
+test('the UI stays on the staging deployment for each instance', () => {
   assert.strictEqual(
-    getYmaxUiUrl(undefined),
+    getYmaxUiUrl('ymax0', undefined),
     'https://staging-agentic-ui.ymax0-ui.pages.dev',
+  );
+  assert.strictEqual(
+    getYmaxUiUrl('ymax1', undefined),
+    'https://staging-agentic-ui.ymax1-ui.pages.dev',
   );
 });
 
@@ -39,7 +43,7 @@ test('YDS defaults follow the selected instance', () => {
 
 test('explicit endpoint overrides apply without passing the environment', () => {
   assert.strictEqual(
-    getYmaxUiUrl('https://example.test/ui'),
+    getYmaxUiUrl('ymax1', 'https://example.test/ui'),
     'https://example.test/ui',
   );
   assert.strictEqual(

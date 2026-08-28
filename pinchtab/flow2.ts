@@ -68,7 +68,7 @@ export const main = async (
     { delay },
   );
   const uiUrl =
-    env.YMAX_UI_URL || "https://staging-agentic-ui.ymax0-ui.pages.dev";
+    env.YMAX_UI_URL || "https://staging-agentic-ui.ymax1-ui.pages.dev";
 
   log("Flow 2: checking the local PinchTab server...");
   await pinchtab.health();

@@ -61,7 +61,7 @@ Existing-portfolio grant:
 {YMAX_UI_URL}/grant?accountHolder={delegateAddress}
 ```
 
-The default UI is `https://staging-agentic-ui.ymax0-ui.pages.dev/`. Configure `YMAX_UI_URL` to override it.
+The default UI matches the onboarding selection: `https://staging-agentic-ui.ymax1-ui.pages.dev/` for ymax1 and `https://staging-agentic-ui.ymax0-ui.pages.dev/` for ymax0. Configure `YMAX_UI_URL` to override it.
 
 ## Failure Triage
 

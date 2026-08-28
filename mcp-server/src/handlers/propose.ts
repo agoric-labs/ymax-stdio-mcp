@@ -24,7 +24,7 @@ export async function handleProposeCreate(
     return toolError('no active delegate — call generate_delegate_key first');
   }
   const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
-  const ymaxUiUrl = getYmaxUiUrl(ymaxUiUrlOverride);
+  const ymaxUiUrl = getYmaxUiUrl(ymaxInstance, ymaxUiUrlOverride);
 
   return {
     content: [
@@ -54,7 +54,7 @@ export async function handleProposeGrant(
     return toolError('no active delegate — call generate_delegate_key first');
   }
   const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
-  const ymaxUiUrl = getYmaxUiUrl(ymaxUiUrlOverride);
+  const ymaxUiUrl = getYmaxUiUrl(ymaxInstance, ymaxUiUrlOverride);
 
   return {
     content: [
@@ -81,7 +81,7 @@ export async function handleProposeEdit(
     return toolError('no portfolio state — call redeem_invitation first');
   }
   const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
-  const ymaxUiUrl = getYmaxUiUrl(ymaxUiUrlOverride);
+  const ymaxUiUrl = getYmaxUiUrl(ymaxInstance, ymaxUiUrlOverride);
 
   return {
     content: [

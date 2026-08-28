@@ -25,7 +25,7 @@ test('new ymax1 onboarding proposes through the staging agentic UI', async () =>
   assert.strictEqual(result.ymaxInstance, 'ymax1');
   assert.strictEqual(
     new URL(result.url).origin,
-    'https://staging-agentic-ui.ymax0-ui.pages.dev',
+    'https://staging-agentic-ui.ymax1-ui.pages.dev',
   );
 });
 
