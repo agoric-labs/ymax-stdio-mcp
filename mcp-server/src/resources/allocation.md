@@ -4,7 +4,7 @@
 
 YDS (YMax Data Service) is the read-only API for portfolio state, instruments, and flow data. All data queries go to YDS; the MCP server handles signed operations and builds owner-approval links.
 
-- **Base URL**: `https://main0.ymax.app`
+- **Base URL**: `https://main1.ymax.app` for ymax1 or `https://main0.ymax.app` for ymax0
 - **Discover endpoints**: `GET /openapi.json` (OpenAPI 3.0 spec)
 
 Use the OpenAPI spec to discover available endpoints rather than hardcoding paths.
@@ -38,7 +38,7 @@ Your delegated authority is **allocation** (currently the only mandate type; oth
 ### 1. Fetch current portfolio state
 
 ```
-GET https://main0.ymax.app/portfolios/portfolio{NN}
+GET {YDS_URL}/portfolios/portfolio{NN}
 ```
 
 Extract:
@@ -86,11 +86,11 @@ Call `submit_target_allocation` with the allocation map. The MCP server:
 1. Check the tool response for the tx hash and flow key.
 2. Poll the portfolio endpoint to confirm the new `targetAllocation`:
    ```
-   GET https://main0.ymax.app/portfolios/portfolio{NN}
+   GET {YDS_URL}/portfolios/portfolio{NN}
    ```
 3. Track flow execution:
    ```
-   GET https://main0.ymax.app/portfolios/portfolio{NN}/flows/flow{N}
+   GET {YDS_URL}/portfolios/portfolio{NN}/flows/flow{N}
    ```
 
 ## Retry and Escalation

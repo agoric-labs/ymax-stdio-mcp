@@ -14,8 +14,7 @@ import { defaultStateStore, type StateStore } from '../state.ts';
 import { attemptRegistration } from '../registration.ts';
 import { registrationOutcome, toolError } from '../responses.ts';
 import type { ToolResponse } from '../types.ts';
-
-const YMAX_INSTANCE = 'ymax0';
+import { getDelegateYmaxInstance } from '../ymax-instance.ts';
 
 const delay = (ms: number): Promise<void> =>
   new Promise(r => setTimeout(r, ms));
@@ -41,6 +40,7 @@ export async function handleRedeem(
   if (!activeDelegate) {
     return toolError('no active delegate — call generate_delegate_key first');
   }
+  const ymaxInstanceName = getDelegateYmaxInstance(activeDelegate);
 
   const fetch = options.fetch;
   const networkConfig = await fetchEnvNetworkConfig({
@@ -49,9 +49,9 @@ export async function handleRedeem(
   });
   const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
 
-  const ymaxInstance = walletKit.agoricNames.instance[YMAX_INSTANCE];
+  const ymaxInstance = walletKit.agoricNames.instance[ymaxInstanceName];
   if (!ymaxInstance) {
-    return toolError(`contract ${YMAX_INSTANCE} not found in agoricNames`);
+    return toolError(`contract ${ymaxInstanceName} not found in agoricNames`);
   }
 
   let invitation;
@@ -116,11 +116,11 @@ export async function handleRedeem(
     {
       txHash: result.tx.transactionHash,
       chain: networkConfig.chainName,
-      ymaxInstance: YMAX_INSTANCE,
+      ymaxInstance: ymaxInstanceName,
     },
     {
-      env: options.env,
       fetch,
+      ydsUrl: options.env.YDS_URL,
     },
   );
 
@@ -128,6 +128,7 @@ export async function handleRedeem(
     'redeemed',
     {
       delegationKey: delegationKeyName,
+      ymaxInstance: ymaxInstanceName,
       redeemTx: result.tx.transactionHash,
       portfolioId,
       agentId,

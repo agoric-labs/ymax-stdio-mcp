@@ -9,16 +9,22 @@ import {
 } from '../state.ts';
 import { toolError } from '../responses.ts';
 import type { ProposalParams, ToolResponse } from '../types.ts';
+import {
+  getDelegateYmaxInstance,
+  getYmaxUiUrl,
+} from '../ymax-instance.ts';
 
 export async function handleProposeCreate(
   allocations: ProposalParams,
   state: Pick<StateStore, 'getActiveDelegate'>,
-  ymaxUiUrl: string,
+  ymaxUiUrlOverride: string | undefined,
 ): Promise<ToolResponse> {
   const activeDelegate = state.getActiveDelegate();
   if (!activeDelegate) {
     return toolError('no active delegate — call generate_delegate_key first');
   }
+  const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
+  const ymaxUiUrl = getYmaxUiUrl(ymaxUiUrlOverride);
 
   return {
     content: [
@@ -26,6 +32,7 @@ export async function handleProposeCreate(
         type: 'text',
         text: JSON.stringify({
           action: 'create_and_delegate',
+          ymaxInstance,
           url: buildCreateProposalUrl(
             ymaxUiUrl,
             allocations,
@@ -40,12 +47,14 @@ export async function handleProposeCreate(
 
 export async function handleProposeGrant(
   state: Pick<StateStore, 'getActiveDelegate'>,
-  ymaxUiUrl: string,
+  ymaxUiUrlOverride: string | undefined,
 ): Promise<ToolResponse> {
   const activeDelegate = state.getActiveDelegate();
   if (!activeDelegate) {
     return toolError('no active delegate — call generate_delegate_key first');
   }
+  const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
+  const ymaxUiUrl = getYmaxUiUrl(ymaxUiUrlOverride);
 
   return {
     content: [
@@ -53,6 +62,7 @@ export async function handleProposeGrant(
         type: 'text',
         text: JSON.stringify({
           action: 'delegate_existing_portfolio',
+          ymaxInstance,
           url: buildGrantProposalUrl(ymaxUiUrl, activeDelegate.address),
           permissions: { allocation: true },
         }),
@@ -64,12 +74,14 @@ export async function handleProposeGrant(
 export async function handleProposeEdit(
   allocations: ProposalParams,
   state: Pick<StateStore, 'getActiveDelegate'>,
-  ymaxUiUrl: string,
+  ymaxUiUrlOverride: string | undefined,
 ): Promise<ToolResponse> {
   const activeDelegate = state.getActiveDelegate();
   if (!activeDelegate || !hasPortfolioId(activeDelegate)) {
     return toolError('no portfolio state — call redeem_invitation first');
   }
+  const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
+  const ymaxUiUrl = getYmaxUiUrl(ymaxUiUrlOverride);
 
   return {
     content: [
@@ -77,6 +89,7 @@ export async function handleProposeEdit(
         type: 'text',
         text: JSON.stringify({
           action: 'owner_approval_required',
+          ymaxInstance,
           url: buildEditProposalUrl(ymaxUiUrl, allocations),
           portfolioId: activeDelegate.portfolioId,
         }),

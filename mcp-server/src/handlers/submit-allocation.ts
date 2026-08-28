@@ -18,8 +18,7 @@ import {
   toolError,
 } from '../responses.ts';
 import type { AllocationMap, ToolResponse } from '../types.ts';
-
-const YMAX_INSTANCE = 'ymax0';
+import { getDelegateYmaxInstance } from '../ymax-instance.ts';
 
 const delay = (ms: number): Promise<void> =>
   new Promise(r => setTimeout(r, ms));
@@ -64,6 +63,7 @@ export async function handleSubmitAllocation(
   if (!hasPortfolioId(activeDelegate) || !activeDelegate.delegationKeyName) {
     return toolError('no portfolio state — call redeem_invitation first');
   }
+  const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
 
   const fetch = options.fetch;
   const networkConfig = await fetchEnvNetworkConfig({
@@ -94,7 +94,7 @@ export async function handleSubmitAllocation(
   });
 
   const status = (await walletKit.readPublished(
-    `${YMAX_INSTANCE}.portfolios.portfolio${activeDelegate.portfolioId}`,
+    `${ymaxInstance}.portfolios.portfolio${activeDelegate.portfolioId}`,
   )) as { policyVersion: number; rebalanceCount: number };
 
   const syncState = {
@@ -129,11 +129,11 @@ export async function handleSubmitAllocation(
     {
       txHash,
       chain: networkConfig.chainName,
-      ymaxInstance: YMAX_INSTANCE,
+      ymaxInstance,
     },
     {
-      env: options.env,
       fetch,
+      ydsUrl: options.env.YDS_URL,
     },
   );
 
@@ -141,6 +141,7 @@ export async function handleSubmitAllocation(
     return submissionRejected(
       {
         txHash,
+        ymaxInstance,
         policyVersion: syncState.policyVersion,
         error: `invokeEntry failed (${result.tx.code}): ${result.tx.rawLog}`,
       },
@@ -160,14 +161,19 @@ export async function handleSubmitAllocation(
 
   if (invocationError) {
     return submissionRejected(
-      { txHash, policyVersion: syncState.policyVersion, error: invocationError },
+      {
+        txHash,
+        ymaxInstance,
+        policyVersion: syncState.policyVersion,
+        error: invocationError,
+      },
       registration,
     );
   }
 
   return registrationOutcome(
     'submitted',
-    { txHash, policyVersion: syncState.policyVersion },
+    { txHash, ymaxInstance, policyVersion: syncState.policyVersion },
     registration,
     'setTargetAllocation',
   );

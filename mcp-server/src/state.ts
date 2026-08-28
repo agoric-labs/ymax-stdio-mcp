@@ -7,6 +7,7 @@ import {
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DelegateState } from './types.ts';
+import type { YmaxInstance } from './ymax-instance.ts';
 
 export const DEFAULT_STATE_FILE = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -25,7 +26,11 @@ interface PriorPersistedData extends Partial<PersistedData> {
 }
 
 export interface StateStore {
-  createActiveDelegate(mnemonic: string, address: string): string;
+  createActiveDelegate(
+    mnemonic: string,
+    address: string,
+    ymaxInstance: YmaxInstance,
+  ): string;
   getActiveDelegate(): DelegateState | undefined;
   updateActiveDelegate(updates: Partial<DelegateState>): boolean;
 }
@@ -87,9 +92,13 @@ export function makeStateStore(
   }
 
   const store: StateStore = {
-    createActiveDelegate(mnemonic: string, address: string): string {
+    createActiveDelegate(
+      mnemonic: string,
+      address: string,
+      ymaxInstance: YmaxInstance,
+    ): string {
       const delegateId = crypto.randomUUID();
-      delegates.set(delegateId, { mnemonic, address });
+      delegates.set(delegateId, { mnemonic, address, ymaxInstance });
       data.activeDelegateId = delegateId;
       persist();
       return delegateId;

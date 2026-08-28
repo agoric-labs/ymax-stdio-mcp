@@ -1,6 +1,9 @@
+import type { YmaxInstance } from './ymax-instance.ts';
+
 export interface DelegateState {
   mnemonic: string;
   address: string;
+  ymaxInstance?: YmaxInstance;
   portfolioId?: number;
   delegationKeyName?: string;
 }

@@ -1,6 +1,6 @@
 # YMax Agent Onboarding
 
-YDS is the read API for portfolio and instrument data. Base URL for beta: `https://main0.ymax.app`.
+YDS is the read API for portfolio and instrument data. Use `https://main1.ymax.app` for ymax1 or `https://main0.ymax.app` for ymax0.
 
 The MCP server keeps signing material and signed operations local.
 
@@ -10,11 +10,11 @@ If the user wants a reusable strategy, write code for its deterministic portions
 
 ## Role Boundaries
 
-- Call `generate_delegate_key`; the server creates, funds, and provisions the delegate wallet.
+- Call `generate_delegate_key` with the user's selected `ymaxInstance`; the server creates, funds, and provisions the delegate wallet. New onboarding defaults to ymax1.
 - Never ask the user for a mnemonic or private key.
 - The MCP server stores the active delegate locally. Later tools use that active delegate.
 - For portfolio creation, funding, delegation, and owner edits, propose through UI links. The user approves in YMax.
-- Never create the portfolio yourself; only the user can do that on `main0.ymax.app`.
+- Never create the portfolio yourself; only the user can do that in the YMax UI.
 - Use `submit_target_allocation` only after the delegation invitation has been redeemed.
 
 ## Delegation Model
@@ -29,7 +29,7 @@ If the user wants a reusable strategy, write code for its deterministic portions
 ## Run Order
 
 1. Query YDS, discuss risk, and propose an initial allocation.
-2. Call `generate_delegate_key` with `clobberActiveDelegate: false` unless the user explicitly wants to replace an existing active delegate.
+2. Call `generate_delegate_key` with the selected `ymaxInstance` and `clobberActiveDelegate: false` unless the user explicitly wants to replace an existing active delegate. Omit `ymaxInstance` to use ymax1.
 3. Call `propose_create` with the proposed allocation map.
 4. Give the returned link to the user. They create, fund, and delegate in one UI flow.
 5. Call `redeem_invitation`; do not ask the user for a portfolio number.
@@ -61,7 +61,7 @@ Existing-portfolio grant:
 {YMAX_UI_URL}/grant?accountHolder={delegateAddress}
 ```
 
-The default UI for this agentic demo is `https://staging-agentic-ui.ymax0-ui.pages.dev/` (the `Agoric/ymax-web#840` branch preview). Configure `YMAX_UI_URL` when targeting another deployment.
+The default UI is `https://staging-agentic-ui.ymax0-ui.pages.dev/`. Configure `YMAX_UI_URL` to override it.
 
 ## Failure Triage
 

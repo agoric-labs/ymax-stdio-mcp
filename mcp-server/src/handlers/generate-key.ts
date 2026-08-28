@@ -3,6 +3,10 @@ import { stringToPath } from '@cosmjs/crypto';
 import { fundDelegate, type SponsorOptions } from '../sponsor.ts';
 import { provisionWallet } from '../provision.ts';
 import { defaultStateStore, type StateStore } from '../state.ts';
+import {
+  DEFAULT_YMAX_INSTANCE,
+  type YmaxInstance,
+} from '../ymax-instance.ts';
 
 const HD_PATH = "m/44'/564'/0'/0/0";
 
@@ -14,8 +18,10 @@ export interface GenerateKeyOptions {
 export async function handleGenerateKey(
   clobberActiveDelegate: boolean,
   options: GenerateKeyOptions,
+  ymaxInstance: YmaxInstance = DEFAULT_YMAX_INSTANCE,
 ): Promise<{
   address: string;
+  ymaxInstance: YmaxInstance;
   sponsorTx: string;
   provisionTx: string;
 }> {
@@ -36,10 +42,11 @@ export async function handleGenerateKey(
   const sponsorResult = await fundDelegate(address, options);
   const provisionResult = await provisionWallet(mnemonic, address, options);
 
-  stateStore.createActiveDelegate(mnemonic, address);
+  stateStore.createActiveDelegate(mnemonic, address, ymaxInstance);
 
   return {
     address,
+    ymaxInstance,
     sponsorTx: sponsorResult.txHash,
     provisionTx: provisionResult.txHash,
   };
