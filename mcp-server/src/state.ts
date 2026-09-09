@@ -25,7 +25,11 @@ interface PriorPersistedData extends Partial<PersistedData> {
 }
 
 export interface StateStore {
-  createActiveDelegate(mnemonic: string, address: string): string;
+  createActiveDelegate(
+    mnemonic: string,
+    address: string,
+    hdPath?: string,
+  ): string;
   getActiveDelegate(): DelegateState | undefined;
   updateActiveDelegate(updates: Partial<DelegateState>): boolean;
 }
@@ -87,9 +91,15 @@ export function makeStateStore(
   }
 
   const store: StateStore = {
-    createActiveDelegate(mnemonic: string, address: string): string {
+    createActiveDelegate(
+      mnemonic: string,
+      address: string,
+      hdPath?: string,
+    ): string {
       const delegateId = crypto.randomUUID();
-      delegates.set(delegateId, { mnemonic, address });
+      // Recorded so a later change to DEFAULT_HD_PATH cannot silently strand
+      // the address this delegate's grant is bound to.
+      delegates.set(delegateId, { mnemonic, hdPath, address });
       data.activeDelegateId = delegateId;
       persist();
       return delegateId;

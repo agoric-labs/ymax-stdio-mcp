@@ -2,15 +2,14 @@ import {
   fetchEnvNetworkConfig,
   getInvocationUpdate,
   makeSmartWalletKit,
-  makeSigningSmartWalletKit,
   reflectWalletStore,
 } from '@agoric/client-utils';
-import { SigningStargateClient } from '@cosmjs/stargate';
 import {
   defaultStateStore,
   hasPortfolioId,
   type StateStore,
 } from '../state.ts';
+import { makeDelegateSigningKit } from '../signing.ts';
 import { attemptRegistration } from '../registration.ts';
 import {
   registrationOutcome,
@@ -72,13 +71,7 @@ export async function handleSubmitAllocation(
   });
   const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
 
-  const ssk = await makeSigningSmartWalletKit(
-    {
-      connectWithSigner: SigningStargateClient.connectWithSigner,
-      walletUtils: walletKit,
-    },
-    activeDelegate.mnemonic,
-  );
+  const ssk = await makeDelegateSigningKit(walletKit, activeDelegate);
 
   // sendOnly returns as soon as the transaction is broadcast. Without it,
   // reflectWalletStore awaits the invocation result internally and throws on a

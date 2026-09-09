@@ -3,8 +3,7 @@ import { stringToPath } from '@cosmjs/crypto';
 import { fundDelegate, type SponsorOptions } from '../sponsor.ts';
 import { provisionWallet } from '../provision.ts';
 import { defaultStateStore, type StateStore } from '../state.ts';
-
-const HD_PATH = "m/44'/564'/0'/0/0";
+import { DEFAULT_HD_PATH } from '../hd-path.ts';
 
 export interface GenerateKeyOptions {
   env: SponsorOptions['env'];
@@ -28,7 +27,7 @@ export async function handleGenerateKey(
 
   const wallet = await DirectSecp256k1HdWallet.generate(24, {
     prefix: 'agoric',
-    hdPaths: [stringToPath(HD_PATH)],
+    hdPaths: [stringToPath(DEFAULT_HD_PATH)],
   });
   const [{ address }] = await wallet.getAccounts();
   const mnemonic = wallet.mnemonic;
@@ -36,7 +35,7 @@ export async function handleGenerateKey(
   const sponsorResult = await fundDelegate(address, options);
   const provisionResult = await provisionWallet(mnemonic, address, options);
 
-  stateStore.createActiveDelegate(mnemonic, address);
+  stateStore.createActiveDelegate(mnemonic, address, DEFAULT_HD_PATH);
 
   return {
     address,

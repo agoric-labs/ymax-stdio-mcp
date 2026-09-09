@@ -1,16 +1,15 @@
 import {
   fetchEnvNetworkConfig,
   makeSmartWalletKit,
-  makeSigningSmartWalletKit,
   reflectWalletStore,
   retryUntilCondition,
 } from '@agoric/client-utils';
-import { SigningStargateClient } from '@cosmjs/stargate';
 import {
   findPortfolioMandateInvitation,
   getPortfolioMandateDetails,
 } from '../invitation.ts';
 import { defaultStateStore, type StateStore } from '../state.ts';
+import { makeDelegateSigningKit } from '../signing.ts';
 import { attemptRegistration } from '../registration.ts';
 import { registrationOutcome, toolError } from '../responses.ts';
 import type { ToolResponse } from '../types.ts';
@@ -85,13 +84,7 @@ export async function handleRedeem(
   const { portfolioId, agentId, permissions } =
     getPortfolioMandateDetails(invitation);
 
-  const ssk = await makeSigningSmartWalletKit(
-    {
-      connectWithSigner: SigningStargateClient.connectWithSigner,
-      walletUtils: walletKit,
-    },
-    activeDelegate.mnemonic,
-  );
+  const ssk = await makeDelegateSigningKit(walletKit, activeDelegate);
 
   const store = reflectWalletStore(ssk, {
     setTimeout: options.setTimeout,
