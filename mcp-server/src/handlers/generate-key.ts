@@ -12,7 +12,19 @@ import {
 export interface GenerateKeyOptions {
   env: SponsorOptions['env'];
   stateStore?: StateStore;
+  generateDelegate?: () => Promise<{ mnemonic: string; address: string }>;
+  fundDelegate?: typeof fundDelegate;
+  provisionWallet?: typeof provisionWallet;
 }
+
+const generateDelegate = async () => {
+  const wallet = await DirectSecp256k1HdWallet.generate(24, {
+    prefix: 'agoric',
+    hdPaths: [stringToPath(DEFAULT_HD_PATH)],
+  });
+  const [{ address }] = await wallet.getAccounts();
+  return { mnemonic: wallet.mnemonic, address };
+};
 
 export async function handleGenerateKey(
   clobberActiveDelegate: boolean,
@@ -31,15 +43,19 @@ export async function handleGenerateKey(
     );
   }
 
-  const wallet = await DirectSecp256k1HdWallet.generate(24, {
-    prefix: 'agoric',
-    hdPaths: [stringToPath(DEFAULT_HD_PATH)],
-  });
-  const [{ address }] = await wallet.getAccounts();
-  const mnemonic = wallet.mnemonic;
+  const { mnemonic, address } = await (
+    options.generateDelegate ?? generateDelegate
+  )();
 
-  const sponsorResult = await fundDelegate(address, options);
-  const provisionResult = await provisionWallet(mnemonic, address, options);
+  const sponsorResult = await (options.fundDelegate ?? fundDelegate)(
+    address,
+    options,
+  );
+  const provisionResult = await (options.provisionWallet ?? provisionWallet)(
+    mnemonic,
+    address,
+    options,
+  );
 
   stateStore.createActiveDelegate(
     mnemonic,

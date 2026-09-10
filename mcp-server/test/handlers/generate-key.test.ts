@@ -24,3 +24,41 @@ test('handleGenerateKey refuses to replace active delegate without clobber', asy
     /active delegate already exists; pass clobberActiveDelegate=true to replace it/,
   );
 });
+
+test('handleGenerateKey persists the instance and HD path', async () => {
+  const stateStore = testStore();
+  const result = await handleGenerateKey(
+    false,
+    {
+      env: {},
+      stateStore,
+      generateDelegate: async () => ({
+        mnemonic: 'test mnemonic',
+        address: 'agoric1delegate',
+      }),
+      fundDelegate: async address => {
+        assert.strictEqual(address, 'agoric1delegate');
+        return { txHash: 'SPONSOR_TX', amount: '20000000' };
+      },
+      provisionWallet: async (mnemonic, address) => {
+        assert.strictEqual(mnemonic, 'test mnemonic');
+        assert.strictEqual(address, 'agoric1delegate');
+        return { txHash: 'PROVISION_TX' };
+      },
+    },
+    'ymax1',
+  );
+
+  assert.deepStrictEqual(result, {
+    address: 'agoric1delegate',
+    ymaxInstance: 'ymax1',
+    sponsorTx: 'SPONSOR_TX',
+    provisionTx: 'PROVISION_TX',
+  });
+  assert.deepStrictEqual(stateStore.getActiveDelegate(), {
+    mnemonic: 'test mnemonic',
+    address: 'agoric1delegate',
+    ymaxInstance: 'ymax1',
+    hdPath: "m/44'/564'/0'/0/0",
+  });
+});

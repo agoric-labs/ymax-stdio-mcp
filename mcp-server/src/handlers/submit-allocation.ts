@@ -33,6 +33,12 @@ export interface SubmitAllocationOptions {
   setTimeout: typeof setTimeout;
   now: () => Date;
   stateStore?: StateStore;
+  fetchEnvNetworkConfig?: typeof fetchEnvNetworkConfig;
+  makeSmartWalletKit?: typeof makeSmartWalletKit;
+  makeDelegateSigningKit?: typeof makeDelegateSigningKit;
+  reflectWalletStore?: typeof reflectWalletStore;
+  getInvocationUpdate?: typeof getInvocationUpdate;
+  attemptRegistration?: typeof attemptRegistration;
 }
 
 function validateAllocations(allocations: AllocationMap): string | undefined {
@@ -65,20 +71,26 @@ export async function handleSubmitAllocation(
   const ymaxInstance = getDelegateYmaxInstance(activeDelegate);
 
   const fetch = options.fetch;
-  const networkConfig = await fetchEnvNetworkConfig({
+  const networkConfig = await (
+    options.fetchEnvNetworkConfig ?? fetchEnvNetworkConfig
+  )({
     env: options.env,
     fetch,
   });
-  const walletKit = await makeSmartWalletKit({ fetch, delay }, networkConfig);
+  const walletKit = await (
+    options.makeSmartWalletKit ?? makeSmartWalletKit
+  )({ fetch, delay }, networkConfig);
 
-  const ssk = await makeDelegateSigningKit(walletKit, activeDelegate);
+  const ssk = await (
+    options.makeDelegateSigningKit ?? makeDelegateSigningKit
+  )(walletKit, activeDelegate);
 
   // sendOnly returns as soon as the transaction is broadcast. Without it,
   // reflectWalletStore awaits the invocation result internally and throws on a
   // contract rejection, discarding { id, tx } — so a rejected allocation would
   // leave no transaction hash to report or register. We await the verdict below
   // instead, keeping the hash either way.
-  const store = reflectWalletStore(ssk, {
+  const store = (options.reflectWalletStore ?? reflectWalletStore)(ssk, {
     setTimeout: options.setTimeout,
     log: (...args: unknown[]) => console.error('-- wallet-store:', ...args),
     makeNonce: () => options.now().toISOString(),
@@ -118,7 +130,9 @@ export async function handleSubmitAllocation(
 
   // Register before knowing the verdict. A rejected allocation is still a
   // broadcast, gas-charged transaction, and it belongs on the activity page.
-  const registration = await attemptRegistration(
+  const registration = await (
+    options.attemptRegistration ?? attemptRegistration
+  )(
     {
       txHash,
       chain: networkConfig.chainName,
@@ -144,9 +158,13 @@ export async function handleSubmitAllocation(
 
   // The contract reports an out-of-mandate allocation here, not in the tx code.
   const invocationError = result.id
-    ? await getInvocationUpdate(result.id, ssk.query.getLastUpdate, {
-        setTimeout: options.setTimeout,
-      }).then(
+    ? await (options.getInvocationUpdate ?? getInvocationUpdate)(
+        result.id,
+        ssk.query.getLastUpdate,
+        {
+          setTimeout: options.setTimeout,
+        },
+      ).then(
         () => undefined,
         (err: Error) => err.message,
       )
