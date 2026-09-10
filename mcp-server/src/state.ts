@@ -7,6 +7,7 @@ import {
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DelegateState } from './types.ts';
+import type { YmaxInstance } from './ymax-instance.ts';
 
 export const DEFAULT_STATE_FILE = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -28,6 +29,7 @@ export interface StateStore {
   createActiveDelegate(
     mnemonic: string,
     address: string,
+    ymaxInstance: YmaxInstance,
     hdPath?: string,
   ): string;
   getActiveDelegate(): DelegateState | undefined;
@@ -94,12 +96,18 @@ export function makeStateStore(
     createActiveDelegate(
       mnemonic: string,
       address: string,
+      ymaxInstance: YmaxInstance,
       hdPath?: string,
     ): string {
       const delegateId = crypto.randomUUID();
       // Recorded so a later change to DEFAULT_HD_PATH cannot silently strand
       // the address this delegate's grant is bound to.
-      delegates.set(delegateId, { mnemonic, hdPath, address });
+      delegates.set(delegateId, {
+        mnemonic,
+        hdPath,
+        address,
+        ymaxInstance,
+      });
       data.activeDelegateId = delegateId;
       persist();
       return delegateId;

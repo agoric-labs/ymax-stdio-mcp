@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { main } from "./flow1.ts";
 
-const UI_URL = "https://staging-agentic-ui.ymax0-ui.pages.dev";
+const UI_URL = "https://staging-agentic-ui.ymax1-ui.pages.dev";
 const RECORDING = "/tmp/profile/.pinchtab-state/recordings/flow1.gif";
 
 const response = (body: unknown, status = 200) =>
@@ -139,7 +139,6 @@ test("flow 1 records around an operator-driven Claude session", async () => {
   const result = await main(
     {
       PINCHTAB_TOKEN: "test-token",
-      YMAX_UI_URL: UI_URL,
       YMAX_FLOW1_DEPOSIT_USDC: "9",
       YMAX_FLOW1_MAX_INSTRUMENTS: "3",
     },
@@ -191,7 +190,7 @@ test("flow 1 records around an operator-driven Claude session", async () => {
     {
       headless: false,
       securityPolicy: {
-        allowedDomains: ["staging-agentic-ui.ymax0-ui.pages.dev"],
+        allowedDomains: ["staging-agentic-ui.ymax1-ui.pages.dev"],
       },
     },
   );

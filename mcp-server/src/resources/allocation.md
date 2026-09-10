@@ -4,7 +4,7 @@
 
 YDS (YMax Data Service) is the read-only API for portfolio state, instruments, and flow data. All data queries go to YDS; the MCP server handles signed operations and builds owner-approval links.
 
-- **Base URL**: `https://main0.ymax.app`
+- **Base URL**: `https://main1.ymax.app` for ymax1 or `https://main0.ymax.app` for ymax0
 - **Discover endpoints**: `GET /openapi.json` (OpenAPI 3.0 spec)
 
 Use the OpenAPI spec to discover available endpoints rather than hardcoding paths.
@@ -23,7 +23,7 @@ Your delegated authority is **allocation** (currently the only mandate type; oth
 
 - Create or close the portfolio (owner-only)
 - Deposit or withdraw funds
-- Directly add or remove instrument keys from the portfolio's current set
+- Directly add or remove instrument keys from the portfolio's target allocation
 - Perform any action outside `setTargetAllocation`
 
 ## Guardrails
@@ -38,7 +38,7 @@ Your delegated authority is **allocation** (currently the only mandate type; oth
 ### 1. Fetch current portfolio state
 
 ```
-GET https://main0.ymax.app/portfolios/portfolio{NN}
+GET {YDS_URL}/portfolios/portfolio{NN}
 ```
 
 Extract:
@@ -47,16 +47,16 @@ Extract:
 
 ### 2. Check for stale positions
 
-The portfolio endpoint returns both `targetAllocation` (desired weights) and `latestSnapshot.balances.positions` (which instruments actually have deployed positions). Compare them: if an instrument appears in `targetAllocation` but has no entry in `latestSnapshot.balances.positions`, that instrument has no on-chain position — it was never funded or failed to deploy. Weight allocated to a non-existent position earns 0% yield.
+The portfolio endpoint returns both `targetAllocation` (desired weights) and `latestSnapshot.balances.positions` (which instruments actually have deployed positions). Compare them: if an instrument appears in `targetAllocation` but has no entry in `latestSnapshot.balances.positions`, that instrument has no on-chain position — it was never funded or failed to deploy.
 
-**Action**: Zero-weight unfundable instruments and redistribute their weight to existing positions.
+**Action**: Zero-weight unfundable instruments and redistribute their weight to available instruments.
 
 ### 3. Build the candidate
 
 - Use only the keys from the current `targetAllocation`.
 - Percentages must sum to 100.
 - Instruments can be set to 0 weight (the solver will not route to them).
-- Keep the key set identical to the current allocation — no more, no less.
+- Keep the key set identical to the current target allocation — no more, no less.
 
 ### 4. Evaluate the candidate with YDS
 
@@ -86,11 +86,11 @@ Call `submit_target_allocation` with the allocation map. The MCP server:
 1. Check the tool response for the tx hash and flow key.
 2. Poll the portfolio endpoint to confirm the new `targetAllocation`:
    ```
-   GET https://main0.ymax.app/portfolios/portfolio{NN}
+   GET {YDS_URL}/portfolios/portfolio{NN}
    ```
 3. Track flow execution:
    ```
-   GET https://main0.ymax.app/portfolios/portfolio{NN}/flows/flow{N}
+   GET {YDS_URL}/portfolios/portfolio{NN}/flows/flow{N}
    ```
 
 ## Retry and Escalation
@@ -109,5 +109,4 @@ Call `submit_target_allocation` with the allocation map. The MCP server:
 
 - The solver is sensitive to the delta pattern across all instruments simultaneously. A successful target-balance simulation does not guarantee that cross-chain routing will succeed.
 - Setting an instrument to 0 is permitted — the solver handles removal gracefully.
-- The solver will not create positions. If an instrument has no on-chain position, routing cannot start fresh capital there; you must zero-weight it.
 - After a successful submission, the solver produces a multi-step plan (CCTP bridges → ERC4626 deposits). Flow state tracks each step.

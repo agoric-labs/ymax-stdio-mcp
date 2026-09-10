@@ -4,6 +4,10 @@ import { fundDelegate, type SponsorOptions } from '../sponsor.ts';
 import { provisionWallet } from '../provision.ts';
 import { defaultStateStore, type StateStore } from '../state.ts';
 import { DEFAULT_HD_PATH } from '../hd-path.ts';
+import {
+  DEFAULT_YMAX_INSTANCE,
+  type YmaxInstance,
+} from '../ymax-instance.ts';
 
 export interface GenerateKeyOptions {
   env: SponsorOptions['env'];
@@ -13,8 +17,10 @@ export interface GenerateKeyOptions {
 export async function handleGenerateKey(
   clobberActiveDelegate: boolean,
   options: GenerateKeyOptions,
+  ymaxInstance: YmaxInstance = DEFAULT_YMAX_INSTANCE,
 ): Promise<{
   address: string;
+  ymaxInstance: YmaxInstance;
   sponsorTx: string;
   provisionTx: string;
 }> {
@@ -35,10 +41,16 @@ export async function handleGenerateKey(
   const sponsorResult = await fundDelegate(address, options);
   const provisionResult = await provisionWallet(mnemonic, address, options);
 
-  stateStore.createActiveDelegate(mnemonic, address, DEFAULT_HD_PATH);
+  stateStore.createActiveDelegate(
+    mnemonic,
+    address,
+    ymaxInstance,
+    DEFAULT_HD_PATH,
+  );
 
   return {
     address,
+    ymaxInstance,
     sponsorTx: sponsorResult.txHash,
     provisionTx: provisionResult.txHash,
   };

@@ -30,7 +30,12 @@ test('delegateHdPath honors a recorded hdPath', () => {
 test('createActiveDelegate records the derivation path it was given', () => {
   const file = testFile();
   const store = makeStateStore(file);
-  store.createActiveDelegate('test mnemonic', 'agoric1abc', DEFAULT_HD_PATH);
+  store.createActiveDelegate(
+    'test mnemonic',
+    'agoric1abc',
+    'ymax0',
+    DEFAULT_HD_PATH,
+  );
 
   const reloaded = makeStateStore(file).getActiveDelegate();
   assert.ok(reloaded);
@@ -40,7 +45,7 @@ test('createActiveDelegate records the derivation path it was given', () => {
 test('a delegate saved without a path still resolves to the default', () => {
   const file = testFile();
   const store = makeStateStore(file);
-  store.createActiveDelegate('test mnemonic', 'agoric1abc');
+  store.createActiveDelegate('test mnemonic', 'agoric1abc', 'ymax0');
 
   const reloaded = makeStateStore(file).getActiveDelegate();
   assert.ok(reloaded);

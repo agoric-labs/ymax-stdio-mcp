@@ -1,8 +1,8 @@
-const DEFAULT_YDS_URL = 'https://main0.ymax.app';
+import { getYdsUrl, type YmaxInstance } from './ymax-instance.ts';
 
 export interface RegistrationOptions {
-  env: NodeJS.ProcessEnv;
   fetch: typeof fetch;
+  ydsUrl?: string;
 }
 
 export type Registration =
@@ -19,7 +19,7 @@ export async function attemptRegistration(
   params: {
     txHash: string;
     chain: string;
-    ymaxInstance: string;
+    ymaxInstance: YmaxInstance;
   },
   options: RegistrationOptions,
 ): Promise<Registration> {
@@ -36,12 +36,12 @@ export async function registerTransaction(
   params: {
     txHash: string;
     chain: string;
-    ymaxInstance: string;
+    ymaxInstance: YmaxInstance;
   },
   options: RegistrationOptions,
 ): Promise<{ success: boolean }> {
   const { txHash, chain, ymaxInstance } = params;
-  const ydsUrl = options.env.YDS_URL || DEFAULT_YDS_URL;
+  const ydsUrl = getYdsUrl(ymaxInstance, options.ydsUrl);
 
   // POST /transactions requires all three fields; YDS resolves the portfolio
   // from the transaction itself, so portfolioId is not part of the request.

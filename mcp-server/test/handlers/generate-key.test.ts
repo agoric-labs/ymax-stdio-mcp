@@ -13,7 +13,7 @@ function testStore() {
 
 test('handleGenerateKey refuses to replace active delegate without clobber', async () => {
   const stateStore = testStore();
-  stateStore.createActiveDelegate('mnemonic', 'addr');
+  stateStore.createActiveDelegate('mnemonic', 'addr', 'ymax1');
 
   await assert.rejects(
     () =>

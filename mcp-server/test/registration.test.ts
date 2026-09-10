@@ -8,7 +8,6 @@ import {
 const YDS_URL = 'https://main0.ymax.app';
 
 const options = (fetchImpl: typeof fetch) => ({
-  env: {},
   fetch: fetchImpl,
 });
 
@@ -30,6 +29,36 @@ test('registerTransaction calls fetch with correct URL and method', async () => 
   assert.strictEqual(calls.length, 1);
   assert.strictEqual(calls[0].url, `${YDS_URL}/transactions`);
   assert.strictEqual(calls[0].options.method, 'POST');
+});
+
+test('registerTransaction uses the ymax1 YDS by default', async () => {
+  const urls: string[] = [];
+  const fetchMock = async (url: string) => {
+    urls.push(url);
+    return new Response(JSON.stringify({}), { status: 202 });
+  };
+
+  await registerTransaction(
+    { ...params, ymaxInstance: 'ymax1' },
+    options(fetchMock as typeof fetch),
+  );
+
+  assert.deepStrictEqual(urls, ['https://main1.ymax.app/transactions']);
+});
+
+test('registerTransaction accepts a YDS URL without the environment', async () => {
+  const urls: string[] = [];
+  const fetchMock = async (url: string) => {
+    urls.push(url);
+    return new Response(JSON.stringify({}), { status: 202 });
+  };
+
+  await registerTransaction(params, {
+    fetch: fetchMock as typeof fetch,
+    ydsUrl: 'https://example.test',
+  });
+
+  assert.deepStrictEqual(urls, ['https://example.test/transactions']);
 });
 
 test('registerTransaction sends every field POST /transactions requires', async () => {

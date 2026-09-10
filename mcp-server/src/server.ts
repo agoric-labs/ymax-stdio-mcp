@@ -29,6 +29,10 @@ import {
 import { toolError } from './responses.ts';
 import { ALL_RESOURCES, RESOURCE_BY_URI } from './resources.ts';
 import type { ToolResponse } from './types.ts';
+import {
+  DEFAULT_YMAX_INSTANCE,
+  parseYmaxInstance,
+} from './ymax-instance.ts';
 
 interface ServerPowers {
   env: NodeJS.ProcessEnv;
@@ -70,7 +74,7 @@ const server = new Server(
     name: 'ymax-yield-agent',
     version: '0.1.0',
     description:
-      'YMax yield agent for Agoric mainnet. Manages delegated cross-chain yield portfolio allocations on ymax0.',
+      'YMax yield agent for Agoric mainnet. Manages delegated cross-chain yield portfolio allocations on ymax0 or ymax1.',
   },
   {
     capabilities: {
@@ -78,6 +82,7 @@ const server = new Server(
       resources: {},
     },
     instructions: [
+      'At onboarding, use the user requested ymax0 or ymax1 instance when calling generate_delegate_key. New onboarding defaults to ymax1. The selection stays bound to the delegate for later actions.',
       'Use generate_delegate_key to create and provision a delegate wallet, then propose_create to give the user one UI flow that creates the portfolio and grants allocation authority.',
       'After the user completes the UI flow, call redeem_invitation. The portfolio ID, agent ID, and permissions come from the delivered invitation.',
       'Then call submit_target_allocation to adjust instrument weights. You must preserve the existing instrument key set - query via YDS to discover it.',
@@ -94,7 +99,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     {
       name: 'generate_delegate_key',
       description:
-        'Create a new delegate key pair, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. Returns the delegate address for the grant UI. The mnemonic is stored in the MCP server and never returned to the client. Refuses to replace an existing active delegate unless clobberActiveDelegate is true.',
+        'Create a new delegate key pair for ymax0 or ymax1, fund the address from the MCP sponsor BLD wallet, and provision the smart wallet. Returns the delegate address and selected instance for the grant UI. The mnemonic is stored in the MCP server and never returned to the client. Refuses to replace an existing active delegate unless clobberActiveDelegate is true.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -102,6 +107,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
             type: 'boolean',
             description:
               'Set true only when you intentionally want to replace the existing active delegate.',
+          },
+          ymaxInstance: {
+            type: 'string',
+            enum: ['ymax0', 'ymax1'],
+            default: DEFAULT_YMAX_INSTANCE,
+            description:
+              'Contract instance for this onboarding and all later delegate actions. Defaults to ymax1.',
           },
         },
         required: ['clobberActiveDelegate'],
@@ -220,10 +232,6 @@ const log = (...args: unknown[]) =>
   console.error('-- ymax-mcp:', ...args);
 
 function installToolHandlers(powers: ServerPowers): void {
-  const ymaxUiUrl =
-    powers.env.YMAX_UI_URL ||
-    'https://staging-agentic-ui.ymax0-ui.pages.dev';
-
   server.setRequestHandler(
     CallToolRequestSchema,
     async (request): Promise<ToolResponse> => {
@@ -234,12 +242,16 @@ function installToolHandlers(powers: ServerPowers): void {
       try {
         switch (name) {
           case 'generate_delegate_key': {
-            const { clobberActiveDelegate } = args as {
-              clobberActiveDelegate: boolean;
-            };
+            const { clobberActiveDelegate, ymaxInstance: rawYmaxInstance } =
+              args as {
+                clobberActiveDelegate: boolean;
+                ymaxInstance?: unknown;
+              };
+            const ymaxInstance = parseYmaxInstance(rawYmaxInstance);
             const result = await handleGenerateKey(
               clobberActiveDelegate,
               powers,
+              ymaxInstance,
             );
             log(`tool ok: ${name} (${Date.now() - started}ms)`);
             return {
@@ -262,7 +274,7 @@ function installToolHandlers(powers: ServerPowers): void {
             const res = await handleProposeCreate(
               allocations,
               powers.stateStore,
-              ymaxUiUrl,
+              powers.env.YMAX_UI_URL,
             );
             log(`tool ok: ${name} (${Date.now() - started}ms)`);
             return res;
@@ -275,7 +287,7 @@ function installToolHandlers(powers: ServerPowers): void {
             const res = await handleProposeEdit(
               allocations,
               powers.stateStore,
-              ymaxUiUrl,
+              powers.env.YMAX_UI_URL,
             );
             log(`tool ok: ${name} (${Date.now() - started}ms)`);
             return res;
@@ -284,7 +296,7 @@ function installToolHandlers(powers: ServerPowers): void {
           case 'propose_grant': {
             const res = await handleProposeGrant(
               powers.stateStore,
-              ymaxUiUrl,
+              powers.env.YMAX_UI_URL,
             );
             log(`tool ok: ${name} (${Date.now() - started}ms)`);
             return res;

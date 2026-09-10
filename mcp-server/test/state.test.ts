@@ -10,7 +10,11 @@ function testFile() {
 
 test('createActiveDelegate sets the active delegate', () => {
   const store = makeStateStore(testFile());
-  const delegateId = store.createActiveDelegate('test mnemonic', 'agoric1abc');
+  const delegateId = store.createActiveDelegate(
+    'test mnemonic',
+    'agoric1abc',
+    'ymax1',
+  );
 
   assert.strictEqual(typeof delegateId, 'string');
   assert.ok(delegateId.length > 0);
@@ -19,14 +23,15 @@ test('createActiveDelegate sets the active delegate', () => {
   assert.ok(activeDelegate);
   assert.strictEqual(activeDelegate.mnemonic, 'test mnemonic');
   assert.strictEqual(activeDelegate.address, 'agoric1abc');
+  assert.strictEqual(activeDelegate.ymaxInstance, 'ymax1');
   assert.strictEqual(activeDelegate.portfolioId, undefined);
   assert.strictEqual(activeDelegate.delegationKeyName, undefined);
 });
 
 test('createActiveDelegate replaces the active delegate', () => {
   const store = makeStateStore(testFile());
-  store.createActiveDelegate('mnemonic-1', 'addr-1');
-  store.createActiveDelegate('mnemonic-2', 'addr-2');
+  store.createActiveDelegate('mnemonic-1', 'addr-1', 'ymax0');
+  store.createActiveDelegate('mnemonic-2', 'addr-2', 'ymax1');
 
   const activeDelegate = store.getActiveDelegate();
   assert.ok(activeDelegate);
@@ -41,7 +46,7 @@ test('getActiveDelegate returns undefined before delegate creation', () => {
 
 test('updateActiveDelegate updates active delegate fields', () => {
   const store = makeStateStore(testFile());
-  store.createActiveDelegate('mnemonic', 'addr');
+  store.createActiveDelegate('mnemonic', 'addr', 'ymax1');
 
   const updated = store.updateActiveDelegate({
     portfolioId: 84,
@@ -63,7 +68,7 @@ test('updateActiveDelegate returns false without an active delegate', () => {
 test('state persists active delegate by path', () => {
   const file = testFile();
   const firstStore = makeStateStore(file);
-  firstStore.createActiveDelegate('mnemonic', 'addr');
+  firstStore.createActiveDelegate('mnemonic', 'addr', 'ymax1');
   firstStore.updateActiveDelegate({ portfolioId: 84 });
 
   const secondStore = makeStateStore(file);
@@ -71,6 +76,7 @@ test('state persists active delegate by path', () => {
   assert.ok(activeDelegate);
   assert.strictEqual(activeDelegate.mnemonic, 'mnemonic');
   assert.strictEqual(activeDelegate.address, 'addr');
+  assert.strictEqual(activeDelegate.ymaxInstance, 'ymax1');
   assert.strictEqual(activeDelegate.portfolioId, 84);
 });
 
