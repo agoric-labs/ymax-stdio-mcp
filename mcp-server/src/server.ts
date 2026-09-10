@@ -31,8 +31,14 @@ import { ALL_RESOURCES, RESOURCE_BY_URI } from './resources.ts';
 import type { ToolResponse } from './types.ts';
 import {
   DEFAULT_YMAX_INSTANCE,
+  getDelegateYmaxInstance,
   parseYmaxInstance,
 } from './ymax-instance.ts';
+import {
+  handleSimulateTargetAllocation,
+  SIMULATE_TARGET_ALLOCATION_TOOL,
+  type ComputeTargetBalancesRequest,
+} from './yds.ts';
 
 interface ServerPowers {
   env: NodeJS.ProcessEnv;
@@ -89,13 +95,14 @@ const server = new Server(
       'Use propose_edit when the user should approve a proposed allocation or instrument-set change in the UI.',
       'Use propose_grant when delegating allocation authority over an existing portfolio.',
       'Provision must happen BEFORE grant. See provisioning-runbook and ymax-onboarding resources for the full run order.',
-      'Before submitting an allocation, read ymax-allocation-delegate and use the current YDS OpenAPI specification to discover and run its planning simulation.',
+      'Before submitting an allocation, read ymax-allocation-delegate and call simulate_target_allocation with the latest absolute portfolio amounts and the proposed target allocation.',
     ].join('\n'),
   },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
+    SIMULATE_TARGET_ALLOCATION_TOOL,
     {
       name: 'generate_delegate_key',
       description:
@@ -307,6 +314,21 @@ function installToolHandlers(powers: ServerPowers): void {
               allocations: Record<string, number>;
             };
             const res = await handleSubmitAllocation(allocations, powers);
+            log(`tool ok: ${name} (${Date.now() - started}ms)`);
+            return res;
+          }
+
+          case 'simulate_target_allocation': {
+            const activeDelegate = powers.stateStore.getActiveDelegate();
+            const res = await handleSimulateTargetAllocation(
+              args as unknown as ComputeTargetBalancesRequest,
+              {
+                ...powers,
+                ymaxInstance: activeDelegate
+                  ? getDelegateYmaxInstance(activeDelegate)
+                  : DEFAULT_YMAX_INSTANCE,
+              },
+            );
             log(`tool ok: ${name} (${Date.now() - started}ms)`);
             return res;
           }

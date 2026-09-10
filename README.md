@@ -29,7 +29,7 @@ cp .env.example .env
 | `AGORIC_NET` | No | Agoric network used for vstorage and wallet actions (default `main`) |
 | `SPONSOR_AMOUNT` | No | `ubld` to send per delegate (default `20000000` = 20 BLD) |
 | `YMAX_UI_URL` | No | Override the YMax UI used for proposal links (defaults to the selected instance's staging agentic UI) |
-| `YDS_URL` | No | Override the YDS endpoint used to register transactions (otherwise selected by instance) |
+| `YDS_URL` | No | Override the YDS endpoint used for simulation and transaction registration (otherwise selected by instance) |
 | `YMAX_STATE_FILE` | No | Delegate state file (defaults to `mcp-server/state.json`) |
 
 ## Start
@@ -58,6 +58,7 @@ when configuration is kept there.
 
 | Tool | Purpose |
 |---|---|
+| `simulate_target_allocation` | Read-only YDS planning simulation with typed input and output |
 | `generate_delegate_key` | Choose `ymax0` or `ymax1`, create a delegate key, fund it, and provision its smart wallet. New onboarding defaults to `ymax1` |
 | `propose_create` | Build one UI link for portfolio creation and delegation |
 | `redeem_invitation` | Redeem `portfolioMandate` and derive its portfolio binding |
@@ -75,7 +76,7 @@ when configuration is kept there.
 
 ## Architecture
 
-- **Read side**: YDS (YMax Data Service) — portfolio state, APYs, flow status
+- **Read side**: YDS (YMax Data Service) — portfolio state, APYs, flow status, and the MCP's typed planning simulation
 - **Action side**: This MCP server — proposal links and signing-key operations
 - **Mnemonic isolation**: Key material is generated inside the server and never exposed to the client
 - **Instance-bound state**: The onboarding choice, delegate key material, and portfolio binding remain inside the server. State from older versions remains bound to `ymax0`
