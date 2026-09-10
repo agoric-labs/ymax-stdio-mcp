@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ALL_RESOURCES, RESOURCE_BY_URI } from '../src/resources.ts';
 
-test('allocation guidance discovers YDS simulation instead of freezing solver details', () => {
+test('allocation guidance uses the typed MCP simulation without freezing solver details', () => {
   assert.deepStrictEqual(
     ALL_RESOURCES.map(resource => resource.uri),
     ['provisioning-runbook', 'ymax-onboarding', 'ymax-allocation-delegate'],
@@ -10,11 +10,8 @@ test('allocation guidance discovers YDS simulation instead of freezing solver de
   assert.strictEqual(RESOURCE_BY_URI['solver-constraints'], undefined);
 
   const guide = RESOURCE_BY_URI['ymax-allocation-delegate'].text;
-  assert.match(guide, /GET \/openapi\.json/);
-  assert.doesNotMatch(
-    guide,
-    /computeTargetBalances|\$2\.00|effective arc minimum|threshold rules/i,
-  );
+  assert.match(guide, /simulate_target_allocation/);
+  assert.doesNotMatch(guide, /\$2\.00|effective arc minimum|threshold rules/i);
 });
 
 test('agent guidance uses friendly instrument names in user-facing communication', () => {

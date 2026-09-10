@@ -1,4 +1,4 @@
-const DEFAULT_YDS_URL = 'https://main0.ymax.app';
+import { DEFAULT_YDS_URL } from './yds.ts';
 
 export interface RegistrationOptions {
   env: NodeJS.ProcessEnv;
