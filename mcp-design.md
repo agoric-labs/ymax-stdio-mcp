@@ -13,7 +13,7 @@ This document defines an MCP (Model Context Protocol) server for a delegated YMa
 
 ### Core principle: read side is YDS
 
-The client (LLM) reads portfolio state, instrument APYs, flow status, and delegation data directly from [YDS (YMax Data Service)](https://main0.ymax.app/openapi.json). The MCP server builds UI proposals and performs operations that require its signing key.
+The client (LLM) reads portfolio state, instrument APYs, flow status, and delegation data from [YDS (YMax Data Service)](https://main0.ymax.app/openapi.json). The MCP server exposes the YDS planning simulation as a typed, read-only tool; it also builds UI proposals and performs operations that require its signing key.
 
 ### Mnemonic isolation
 
@@ -35,6 +35,20 @@ The mnemonic is generated inside the MCP server and **never exposed to the clien
 ---
 
 ## Tools
+
+### 0. `simulate_target_allocation`
+
+Calls YDS's read-only target-balance computation for a proposed deposit,
+withdrawal, or rebalance. The MCP tool publishes complete input and output JSON
+schemas, returns the result as structured content, and declares read-only,
+non-destructive, idempotent annotations. This keeps the live portfolio balances
+behind the explicitly configured local MCP capability instead of requiring the
+agent to construct an arbitrary outbound request.
+
+A successful simulation reports changed target balances and an affected-place
+count. It does not sign, broadcast, or register a transaction, and it does not
+guarantee that the downstream cross-chain route solver will find an executable
+plan.
 
 ### 1. `generate_delegate_key`
 
@@ -229,7 +243,7 @@ CosmJS directly. The server does not invoke Agoric SDK command-line tools.
 | Agent address vs delegate address | The agent address is derived from the mnemonic; the delegate address receives the grant | Delegate address is used for the grant link |
 | Poll for invitation after grant | The invitation may not be available immediately after provisioning | Onboarding report: user retried grant after provisioning |
 | `overwrite: true` on redeem | A first attempt may create a stale `agent1` in revoked state | Onboarding report: first grant before provisioning |
-| No query tools | YDS handles reads; MCP is action-only | Per requirement |
+| One scoped read tool | YDS handles general reads; MCP exposes only the typed planning simulation needed before submission | AGO-1170 |
 | Proposal values forwarded as-is | Lets agents exercise UI boundary behavior | Per requirement |
 | Sponsor wallet funded at MCP startup | Eliminates manual BLD funding step from onboarding | Onboarding report: "fund the delegate address" was a manual hiccup |
 | Auto-register transactions | Activity page ignores delegated submissions | Target allocation report Finding #4, iterative tweaks report Finding #6 |

@@ -5,9 +5,7 @@
 YDS (YMax Data Service) is the read-only API for portfolio state, instruments, and flow data. All data queries go to YDS; the MCP server handles signed operations and builds owner-approval links.
 
 - **Base URL**: `https://main0.ymax.app`
-- **Discover endpoints**: `GET /openapi.json` (OpenAPI 3.0 spec)
-
-Use the OpenAPI spec to discover available endpoints rather than hardcoding paths.
+- **Planning simulation**: call the MCP's `simulate_target_allocation` tool
 
 ## Instrument Names
 
@@ -60,14 +58,13 @@ The portfolio endpoint returns both `targetAllocation` (desired weights) and `la
 
 ### 4. Evaluate the candidate with YDS
 
-Fetch the current YDS OpenAPI specification and discover its planning simulation
-operation. Evaluate the candidate against the latest portfolio amounts before
-submitting it on-chain. Build the request from the operation's current schema;
-do not rely on a hardcoded path or request shape.
+Call `simulate_target_allocation` to evaluate the candidate against the latest
+absolute portfolio amounts before submitting it on-chain. Pass minor-unit
+amounts and allocation weights as natural-number strings. For an allocation
+change, use `{ "type": "rebalance" }` as the action.
 
 If the result contains no affected places, revise the candidate and simulate it
-again. If YDS rejects the request, use its error and current OpenAPI schema to
-correct the candidate.
+again. If YDS rejects the request, use its error to correct the candidate.
 
 The current simulation computes target balances; it does not guarantee that the
 LP route solver will find an executable cross-chain plan. Do not replace that

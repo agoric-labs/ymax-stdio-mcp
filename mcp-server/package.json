@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node src/server.ts",
     "dev": "node --watch src/server.ts",
-    "test": "node --test 'test/state.test.ts' 'test/registration.test.ts' 'test/proposals.test.ts' 'test/invitation.test.ts' 'test/sponsor.test.ts' 'test/responses.test.ts' 'test/resources.test.ts' 'test/handlers/generate-key.test.ts' 'test/handlers/submit-allocation.test.ts'"
+    "test": "node --test 'test/state.test.ts' 'test/registration.test.ts' 'test/yds.test.ts' 'test/proposals.test.ts' 'test/invitation.test.ts' 'test/sponsor.test.ts' 'test/responses.test.ts' 'test/resources.test.ts' 'test/handlers/generate-key.test.ts' 'test/handlers/submit-allocation.test.ts'"
   },
   "dependencies": {
     "@agoric/client-utils": "0.1.1-dev-00d43ed.0.00d43ed",
